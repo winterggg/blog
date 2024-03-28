@@ -1,5 +1,9 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<rss xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/" version="2.0"><channel><title>Blog Title</title><link>https://winterggg.github.io/blog</link><description>Blog description</description><copyright>Blog Title</copyright><docs>http://www.rssboard.org/rss-specification</docs><generator>python-feedgen</generator><image><url>https://github.githubassets.com/favicons/favicon.svg</url><title>avatar</title><link>https://winterggg.github.io/blog</link></image><lastBuildDate>Thu, 28 Mar 2024 04:42:42 +0000</lastBuildDate><managingEditor>Blog Title</managingEditor><ttl>60</ttl><webMaster>Blog Title</webMaster><item><title>如何编写测试</title><link>https://winterggg.github.io/blog/post/ru-he-bian-xie-ce-shi.html</link><description># 如何编写测试&#13;
+<rss xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/" version="2.0"><channel><title>Blog Title</title><link>https://winterggg.github.io/blog</link><description>Blog description</description><copyright>Blog Title</copyright><docs>http://www.rssboard.org/rss-specification</docs><generator>python-feedgen</generator><image><url>https://github.githubassets.com/favicons/favicon.svg</url><title>avatar</title><link>https://winterggg.github.io/blog</link></image><lastBuildDate>Thu, 28 Mar 2024 04:44:02 +0000</lastBuildDate><managingEditor>Blog Title</managingEditor><ttl>60</ttl><webMaster>Blog Title</webMaster><item><title>如何做方案设计</title><link>https://winterggg.github.io/blog/post/ru-he-zuo-fang-an-she-ji.html</link><description># 如何做方案设计&#13;
+&#13;
+&gt; 本文取材自《The missing readme》-- Chapter 10&#13;
+&#13;
+软件设计不是一个线性的过程，更像是在独立工作和相互合作之间交替进行的螺旋式上升的过程，在每一步都要明确和完善设计。</description><guid isPermaLink="true">https://winterggg.github.io/blog/post/ru-he-zuo-fang-an-she-ji.html</guid><pubDate>Thu, 28 Mar 2024 04:43:41 +0000</pubDate></item><item><title>如何编写测试</title><link>https://winterggg.github.io/blog/post/ru-he-bian-xie-ce-shi.html</link><description># 如何编写测试&#13;
 &#13;
 &gt; 本文取材自《The missing readme》-- Chapter 6&#13;
 &#13;
