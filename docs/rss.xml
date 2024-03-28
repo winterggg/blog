@@ -1,12 +1,12 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<rss xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/" version="2.0"><channel><title>Winter Notes</title><link>https://winterggg.github.io/blog</link><description>不是博客，是个文摘</description><copyright>Winter Notes</copyright><docs>http://www.rssboard.org/rss-specification</docs><generator>python-feedgen</generator><image><url>https://avatars.githubusercontent.com/u/92662575?v=4</url><title>avatar</title><link>https://winterggg.github.io/blog</link></image><lastBuildDate>Thu, 28 Mar 2024 04:53:55 +0000</lastBuildDate><managingEditor>Winter Notes</managingEditor><ttl>60</ttl><webMaster>Winter Notes</webMaster><item><title>校外学习 - the missing readme</title><link>https://winterggg.github.io/blog/post/xiao-wai-xue-xi-%20-%20the%20missing%20readme.html</link><description># 校外学习&#13;
+<rss xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/" version="2.0"><channel><title>Winter Notes</title><link>https://winterggg.github.io/blog</link><description>不是博客，是个文摘</description><copyright>Winter Notes</copyright><docs>http://www.rssboard.org/rss-specification</docs><generator>python-feedgen</generator><image><url>https://avatars.githubusercontent.com/u/92662575?v=4</url><title>avatar</title><link>https://winterggg.github.io/blog</link></image><lastBuildDate>Thu, 28 Mar 2024 18:05:01 +0000</lastBuildDate><managingEditor>Winter Notes</managingEditor><ttl>60</ttl><webMaster>Winter Notes</webMaster><item><title>学习与职业生涯规划 - the missing readme</title><link>https://winterggg.github.io/blog/post/xue-xi-yu-zhi-ye-sheng-ya-gui-hua-%20-%20the%20missing%20readme.html</link><description># 学习与职业生涯规划&#13;
 &#13;
-&gt; 本文取材自《The missing readme》-- Chapter 10&#13;
+&gt; 本文取材自《The missing readme》-- Chapter 10/14&#13;
 &#13;
 ## 学习如何学习&#13;
 &#13;
 - 编写、调试代码&#13;
-- 阅读： 团队文档、设计文档、代码、积压的Jira任务、书籍、论文和技术网站。</description><guid isPermaLink="true">https://winterggg.github.io/blog/post/xiao-wai-xue-xi-%20-%20the%20missing%20readme.html</guid><pubDate>Thu, 28 Mar 2024 04:44:07 +0000</pubDate></item><item><title>如何做方案设计 - the missing readme</title><link>https://winterggg.github.io/blog/post/ru-he-zuo-fang-an-she-ji-%20-%20the%20missing%20readme.html</link><description># 如何做方案设计&#13;
+- 阅读： 团队文档、设计文档、代码、积压的Jira任务、书籍、论文和技术网站。</description><guid isPermaLink="true">https://winterggg.github.io/blog/post/xue-xi-yu-zhi-ye-sheng-ya-gui-hua-%20-%20the%20missing%20readme.html</guid><pubDate>Thu, 28 Mar 2024 04:44:07 +0000</pubDate></item><item><title>如何做方案设计 - the missing readme</title><link>https://winterggg.github.io/blog/post/ru-he-zuo-fang-an-she-ji-%20-%20the%20missing%20readme.html</link><description># 如何做方案设计&#13;
 &#13;
 &gt; 本文取材自《The missing readme》-- Chapter 10&#13;
 &#13;
