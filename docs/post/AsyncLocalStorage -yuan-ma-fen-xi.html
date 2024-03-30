@@ -245,7 +245,7 @@ body{box-sizing: border-box;min-width: 200px;max-width: 900px;margin: 20px auto;
     <span class="pl-kos">}</span>
 <span class="pl-kos">}</span></pre></div>
 <h2>上下文丢失的问题</h2>
-<p>在大多数情况下， <code class="notranslate">AsyncLocalStorage</code> 可以正常工作，对于基于回调的函数，只需要使用 <a href="https://nodejs.org/docs/latest-v18.x/api/util.html#utilpromisifyoriginal" rel="nofollow"><code class="notranslate">[util.promisify()](https://nodejs.org/docs/latest-v18.x/api/util.html#utilpromisifyoriginal)</code></a> 将其转换为 <code class="notranslate">Promise</code> 就可以了。</p>
+<p>在大多数情况下， <code class="notranslate">AsyncLocalStorage</code> 可以正常工作，对于基于回调的函数，只需要使用 <a href="https://nodejs.org/docs/latest-v18.x/api/util.html#utilpromisifyoriginal" rel="nofollow"><code class="notranslate">util.promisify()</code></a> 将其转换为 <code class="notranslate">Promise</code> 就可以了。</p>
 <p>在少数情况下可能会发生上下文丢失，这时只需要通过 <code class="notranslate">AsyncResource</code> API 恰当地绑定好上下文即可。当你发现上下文丢失时，可以通过在适当的位置执行 <code class="notranslate">getStore</code> 来推理造出上下文丢失的函数调用并解决修复。</p>
 <p>例如，由 <code class="notranslate">EventEmitter</code> 触发的事件监听器可能在调用 <code class="notranslate">eventEmitter.on()</code> 时的执行上下文中运行。下面展示了一个问题场景以及对应的修复方式，其他类似的基于事件驱动的场景也可以用同样的方式修复：</p>
 <div class="highlight highlight-source-js"><pre class="notranslate"><span class="pl-k">import</span> <span class="pl-kos">{</span> <span class="pl-s1">createServer</span> <span class="pl-kos">}</span> <span class="pl-k">from</span> <span class="pl-s">'node:http'</span><span class="pl-kos">;</span>

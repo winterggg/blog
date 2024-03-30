@@ -217,7 +217,7 @@ public static getContext<T extends BaseContext>(): T | undefined {
 
 ## 上下文丢失的问题
 
-在大多数情况下， `AsyncLocalStorage` 可以正常工作，对于基于回调的函数，只需要使用 [`[util.promisify()](https://nodejs.org/docs/latest-v18.x/api/util.html#utilpromisifyoriginal)`](https://nodejs.org/docs/latest-v18.x/api/util.html#utilpromisifyoriginal) 将其转换为 `Promise` 就可以了。
+在大多数情况下， `AsyncLocalStorage` 可以正常工作，对于基于回调的函数，只需要使用 [`util.promisify()`](https://nodejs.org/docs/latest-v18.x/api/util.html#utilpromisifyoriginal) 将其转换为 `Promise` 就可以了。
 
 在少数情况下可能会发生上下文丢失，这时只需要通过 `AsyncResource` API 恰当地绑定好上下文即可。当你发现上下文丢失时，可以通过在适当的位置执行 `getStore` 来推理造出上下文丢失的函数调用并解决修复。
 
