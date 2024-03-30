@@ -21,13 +21,13 @@
 - （2012年左右）`domain` 是 Node 古早时期用来解决异步代码错误处理的 api，也可以用来维持异步上下文。它的实现涉及到对 Node 的一些底层 API 的魔改，主要是涉及到事件循环的部分，例如 `nextTick`、`setTimeout` 以及大部分异步 IO 的操作，以确保上下文的维持和拦截其中的错误。随之而来的缺点是，由于该模块魔改了全局函数，很容易出现奇奇怪怪的副作用，并且有非常严重的性能问题。目前已被废弃，不再推荐使用。
 - （2013 年）`Continuation-Local Storage (CLS)` 是一个社区维护的库，其实原理类似于 `domain` ，大概就是给 Node.js 的核心异步代码打猴子补丁，依赖的应该是 `process.addAsyncListener` 这个古老（node v0.11）的API，后续通过 polyfill 来兼容。更深入一点其实就是维护了一个全局的栈结构，用来实现一些嵌套的上下文切换。
 - （2017 年）2017年，node 官方释出了 `async_hooks` API，给出了一个 hook 异步调用生命周期各阶段的官方实现。热心网友立马就 fork 了 `CLS` 并基于 `async_hooks` 重写，也就是`CLS-Hooked`库。不过由于 `async_hooks` 的很多 api 其实一直处于 stage-1 实验阶段，依赖于它的 `CLS-Hooked` 也并不推荐在生产环境使用。
-- (2019年，Node 13.10, 12.17) 由于需求太多，官方终于在 19 年随 Node 13.10 发布了 `ALS`，并随后加入到了 12.17 LTS 里。不过刚出来的时候，`ALS` 其实有比较严重的[[性能问题](https://github.com/nodejs/node/issues/34493)](https://github.com/nodejs/node/issues/34493)的。2020 年底，Qard 使用新的 `v8::Context PromiseHook` API [[重构了 async_hooks](https://github.com/nodejs/node/pull/36394)](https://github.com/nodejs/node/pull/36394)，随后的 benchmarks 显示，性能问题已经得到了大幅度的缓解。
+- (2019年，Node 13.10, 12.17) 由于需求太多，官方终于在 19 年随 Node 13.10 发布了 `ALS`，并随后加入到了 12.17 LTS 里。不过刚出来的时候，`ALS` 其实有比较严重的[性能问题](https://github.com/nodejs/node/issues/34493)的。2020 年底，Qard 使用新的 `v8::Context PromiseHook` API [重构了 async_hooks](https://github.com/nodejs/node/pull/36394)，随后的 benchmarks 显示，性能问题已经得到了大幅度的缓解。
 
 简单来说，`domain` 和 `CLS`的实现方式是给 node 打猴子补丁（运行时补丁），而 `CLS-hooked` 和 `ALS` 则是依赖官方的 `async_hooks` API。经过一系列的优化，`ALS` 的性能损耗已经足够低，官方也推荐使用 `ALS` 来追踪异步执行上下文。
 
 ## 使用方式
 
-根据[[官方文档](https://nodejs.org/docs/latest-v18.x/api/async_context.html)](https://nodejs.org/docs/latest-v18.x/api/async_context.html)，`ALS` 的主要 API 如下：
+根据[官方文档](https://nodejs.org/docs/latest-v18.x/api/async_context.html)，`ALS` 的主要 API 如下：
 
 - new AsyncLocalStorage()：创建一个 ALS 实例；
 - asyncLocalStorage.run(store, callback[, ...args]): 在 store 的上下文中运行指定的回调函数。回调函数之外无法访问 store，回调内的**任何异步操作**都能访问 store。并且如果回调出错，run 也会抛出错误，且上下文正常退出，stack trace 不会被污染；
