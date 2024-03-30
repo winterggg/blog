@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html data-color-mode="light" data-dark-theme="dark" data-light-theme="light" lang="zh-CN">
+<head>
+    <meta content="text/html; charset=utf-8" http-equiv="content-type" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <link href="//cdn.staticfile.net/Primer/21.0.7/primer.css" rel="stylesheet" />
+    <link rel="icon" href="https://avatars.githubusercontent.com/u/92662575?v=4">
+    <script>
+        if(localStorage.getItem("meek_theme")==null){}
+        else if(localStorage.getItem("meek_theme")=="dark"){document.getElementsByTagName("html")[0].attributes.getNamedItem("data-color-mode").value="dark";}
+        else if(localStorage.getItem("meek_theme")=="light"){document.getElementsByTagName("html")[0].attributes.getNamedItem("data-color-mode").value="light";}
+    </script>
+    
+<meta name="description" content="AsyncLocalStorage 源码分析">
+<title>AsyncLocalStorage 源码分析</title>
+<link href="//unpkg.com/@wooorm/starry-night@2.1.1/style/both.css" rel="stylesheet" />
+
+</head>
+<style>
+body{box-sizing: border-box;min-width: 200px;max-width: 900px;margin: 20px auto;padding: 45px;font-size: 16px;font-family: sans-serif;line-height: 1.25;}
+#header{display:flex;padding-bottom:8px;border-bottom: 1px solid var(--borderColor-muted, var(--color-border-muted));margin-bottom: 16px;}
+#footer {margin-top:64px; text-align: center;font-size: small;}
+
+</style>
+
+<style>
+.postTitle{margin: auto 0;font-size:40px;font-weight:bold;}
+.title-right{display:flex;margin:auto 0 0 auto;}
+.title-right .circle{padding: 14px 16px;margin-right:8px;}
+#postBody{border-bottom: 1px solid var(--color-border-default);padding-bottom:36px;}
+#postBody hr{height:2px;}
+#cmButton{height:48px;margin-top:48px;}
+#comments{margin-top:64px;}
+.g-emoji{font-size:24px;}
+@media (max-width: 600px) {
+    body {padding: 8px;}
+    .postTitle{font-size:24px;}
+}
+</style>
+
+
+
+
+<body>
+    <div id="header">
+<h1 class="postTitle">AsyncLocalStorage 源码分析</h1>
+<div class="title-right">
+    
+    <a href="https://winterggg.github.io/blog"><button id="buttonHome" class="btn btn-invisible circle" title="首页">
+        <svg class="octicon" width="16" height="16">
+            <path id="pathHome" fill-rule="evenodd"></path>
+        </svg>
+    </button></a>
+
+    
+    <a href="https://github.com/winterggg/blog/issues/7" target="_blank"><button class="btn btn-invisible circle" title="Issue">
+        <svg class="octicon" width="16" height="16">
+            <path id="pathIssue" fill-rule="evenodd"></path>
+        </svg>
+    </button></a>
+    
+
+    <button class="btn btn-invisible circle" onclick="modeSwitch();" title="切换主题">
+        <svg class="octicon" width="16" height="16" >
+            <path id="themeSwitch" fill-rule="evenodd"></path>
+        </svg>
+    </button>
+
+</div>
+</div>
+    <div id="content">
+<div class="markdown-body" id="postBody"><h1>AsyncLocalStorage 源码分析</h1>
+<h2>TL; DR</h2>
+<p>本文概述了 <code class="notranslate">AsyncLocalStorage</code> 的概念和它在 Node.js 中的历史发展。随后简要探讨了 <code class="notranslate">AsyncLocalStorage</code> 的部分源码，以阐明其在异步编程中如何管理上下文状态。最后简单分析了 <code class="notranslate">AsyncLocalStorage</code> 在 <code class="notranslate">fx-code</code> 项目中的实际应用场景。</p>
+<h2>What, Why &amp; History</h2>
+<h3>What &amp; Why?</h3>
+<p><code class="notranslate">AsyncLocalStorage</code> （后文简写为 <code class="notranslate">ALS</code>）是 <code class="notranslate">Node.js</code> 中的一个 API，它提供了一种在异步调用链中存储和传递数据的方法。</p>
+<p>这个类属于 <code class="notranslate">async_hooks</code> 模块，类似于 <code class="notranslate">Python</code> 的 <code class="notranslate">contextvars</code>、<code class="notranslate">Java</code> 的 <code class="notranslate">ThreadLocal</code> ，能够让程序在一个异步上下文中存储数据。</p>
+<p><code class="notranslate">ALS</code> 的典型应用场景包括：请求范围内跟踪用户 auth、日志记录、事务追踪、Metrics 等等。</p>
+<h3>ALS 的历史</h3>
+<p>在 <code class="notranslate">ALS</code> 之前，Node 社区曾涌现过各种解决异步上下文跟踪的方案，包括 <code class="notranslate">domain</code>、<code class="notranslate">CLS</code> 和 <code class="notranslate">CLS-hooked</code>：</p>
+<ul>
+<li>（2012年左右）<code class="notranslate">domain</code> 是 Node 古早时期用来解决异步代码错误处理的 api，也可以用来维持异步上下文。它的实现涉及到对 Node 的一些底层 API 的魔改，主要是涉及到事件循环的部分，例如 <code class="notranslate">nextTick</code>、<code class="notranslate">setTimeout</code> 以及大部分异步 IO 的操作，以确保上下文的维持和拦截其中的错误。随之而来的缺点是，由于该模块魔改了全局函数，很容易出现奇奇怪怪的副作用，并且有非常严重的性能问题。目前已被废弃，不再推荐使用。</li>
+<li>（2013 年）<code class="notranslate">Continuation-Local Storage (CLS)</code> 是一个社区维护的库，其实原理类似于 <code class="notranslate">domain</code> ，大概就是给 Node.js 的核心异步代码打猴子补丁，依赖的应该是 <code class="notranslate">process.addAsyncListener</code> 这个古老（node v0.11）的API，后续通过 polyfill 来兼容。更深入一点其实就是维护了一个全局的栈结构，用来实现一些嵌套的上下文切换。</li>
+<li>（2017 年）2017年，node 官方释出了 <code class="notranslate">async_hooks</code> API，给出了一个 hook 异步调用生命周期各阶段的官方实现。热心网友立马就 fork 了 <code class="notranslate">CLS</code> 并基于 <code class="notranslate">async_hooks</code> 重写，也就是<code class="notranslate">CLS-Hooked</code>库。不过由于 <code class="notranslate">async_hooks</code> 的很多 api 其实一直处于 stage-1 实验阶段，依赖于它的 <code class="notranslate">CLS-Hooked</code> 也并不推荐在生产环境使用。</li>
+<li>(2019年，Node 13.10, 12.17) 由于需求太多，官方终于在 19 年随 Node 13.10 发布了 <code class="notranslate">ALS</code>，并随后加入到了 12.17 LTS 里。不过刚出来的时候，<code class="notranslate">ALS</code> 其实有比较严重的[<a href="https://github.com/nodejs/node/issues/34493" data-hovercard-type="issue" data-hovercard-url="/nodejs/node/issues/34493/hovercard">性能问题</a>](<a href="https://github.com/nodejs/node/issues/34493)%E7%9A%84%E3%80%822020" data-hovercard-type="issue" data-hovercard-url="/nodejs/node/issues/34493/hovercard">https://github.com/nodejs/node/issues/34493)的。2020</a> 年底，Qard 使用新的 <code class="notranslate">v8::Context PromiseHook</code> API [<a href="https://github.com/nodejs/node/pull/36394" data-hovercard-type="pull_request" data-hovercard-url="/nodejs/node/pull/36394/hovercard">重构了 async_hooks</a>](<a href="https://github.com/nodejs/node/pull/36394)%EF%BC%8C%E9%9A%8F%E5%90%8E%E7%9A%84" data-hovercard-type="pull_request" data-hovercard-url="/nodejs/node/pull/36394/hovercard">https://github.com/nodejs/node/pull/36394)，随后的</a> benchmarks 显示，性能问题已经得到了大幅度的缓解。</li>
+</ul>
+<p>简单来说，<code class="notranslate">domain</code> 和 <code class="notranslate">CLS</code>的实现方式是给 node 打猴子补丁（运行时补丁），而 <code class="notranslate">CLS-hooked</code> 和 <code class="notranslate">ALS</code> 则是依赖官方的 <code class="notranslate">async_hooks</code> API。经过一系列的优化，<code class="notranslate">ALS</code> 的性能损耗已经足够低，官方也推荐使用 <code class="notranslate">ALS</code> 来追踪异步执行上下文。</p>
+<h2>使用方式</h2>
+<p>根据[<a href="https://nodejs.org/docs/latest-v18.x/api/async_context.html" rel="nofollow">官方文档</a>](<a href="https://nodejs.org/docs/latest-v18.x/api/async_context.html)%EF%BC%8C%60ALS%60" rel="nofollow">https://nodejs.org/docs/latest-v18.x/api/async_context.html)，`ALS`</a> 的主要 API 如下：</p>
+<ul>
+<li>new AsyncLocalStorage()：创建一个 ALS 实例；</li>
+<li>asyncLocalStorage.run(store, callback[, ...args]): 在 store 的上下文中运行指定的回调函数。回调函数之外无法访问 store，回调内的<strong>任何异步操作</strong>都能访问 store。并且如果回调出错，run 也会抛出错误，且上下文正常退出，stack trace 不会被污染；</li>
+<li>asyncLocalStorage.getStore(): 获得当前上下文 store，如果没有调用过 run 或者 enterwith，将返回 undefined；</li>
+<li>【stage 1 - 实验中】asyncLocalStorage.enterWith(store): 从当前行开始进入 store 的上下文，直到当前同步执行结束；</li>
+<li>【stage 1 - 实验中】asyncLocalStorage.disable(): 清理 store。</li>
+</ul>
+<p>官网的一个例子：</p>
+<div class="highlight highlight-source-js"><pre class="notranslate"><span class="pl-k">import</span> <span class="pl-s1">http</span> <span class="pl-k">from</span> <span class="pl-s">'node:http'</span><span class="pl-kos">;</span>
+<span class="pl-k">import</span> <span class="pl-kos">{</span> <span class="pl-v">AsyncLocalStorage</span> <span class="pl-kos">}</span> <span class="pl-k">from</span> <span class="pl-s">'node:async_hooks'</span><span class="pl-kos">;</span>
+
+<span class="pl-k">const</span> <span class="pl-s1">asyncLocalStorage</span> <span class="pl-c1">=</span> <span class="pl-k">new</span> <span class="pl-v">AsyncLocalStorage</span><span class="pl-kos">(</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+
+<span class="pl-k">function</span> <span class="pl-en">logWithId</span><span class="pl-kos">(</span><span class="pl-s1">msg</span><span class="pl-kos">)</span> <span class="pl-kos">{</span>
+  <span class="pl-k">const</span> <span class="pl-s1">id</span> <span class="pl-c1">=</span> <span class="pl-s1">asyncLocalStorage</span><span class="pl-kos">.</span><span class="pl-en">getStore</span><span class="pl-kos">(</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+  <span class="pl-smi">console</span><span class="pl-kos">.</span><span class="pl-en">log</span><span class="pl-kos">(</span><span class="pl-s">`<span class="pl-s1"><span class="pl-kos">${</span><span class="pl-s1">id</span> <span class="pl-c1">!==</span> <span class="pl-c1">undefined</span> ? <span class="pl-s1">id</span> : <span class="pl-s">'-'</span><span class="pl-kos">}</span></span>:`</span><span class="pl-kos">,</span> <span class="pl-s1">msg</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+<span class="pl-kos">}</span>
+
+<span class="pl-k">let</span> <span class="pl-s1">idSeq</span> <span class="pl-c1">=</span> <span class="pl-c1">0</span><span class="pl-kos">;</span>
+<span class="pl-s1">http</span><span class="pl-kos">.</span><span class="pl-en">createServer</span><span class="pl-kos">(</span><span class="pl-kos">(</span><span class="pl-s1">req</span><span class="pl-kos">,</span> <span class="pl-s1">res</span><span class="pl-kos">)</span> <span class="pl-c1">=&gt;</span> <span class="pl-kos">{</span>
+  <span class="pl-s1">asyncLocalStorage</span><span class="pl-kos">.</span><span class="pl-en">run</span><span class="pl-kos">(</span><span class="pl-s1">idSeq</span><span class="pl-c1">++</span><span class="pl-kos">,</span> <span class="pl-kos">(</span><span class="pl-kos">)</span> <span class="pl-c1">=&gt;</span> <span class="pl-kos">{</span>
+    <span class="pl-en">logWithId</span><span class="pl-kos">(</span><span class="pl-s">'start'</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+    <span class="pl-c">// Imagine any chain of async operations here</span>
+    <span class="pl-en">setImmediate</span><span class="pl-kos">(</span><span class="pl-kos">(</span><span class="pl-kos">)</span> <span class="pl-c1">=&gt;</span> <span class="pl-kos">{</span>
+      <span class="pl-en">logWithId</span><span class="pl-kos">(</span><span class="pl-s">'finish'</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+      <span class="pl-s1">res</span><span class="pl-kos">.</span><span class="pl-en">end</span><span class="pl-kos">(</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+    <span class="pl-kos">}</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+  <span class="pl-kos">}</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+<span class="pl-kos">}</span><span class="pl-kos">)</span><span class="pl-kos">.</span><span class="pl-en">listen</span><span class="pl-kos">(</span><span class="pl-c1">8080</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+
+<span class="pl-s1">http</span><span class="pl-kos">.</span><span class="pl-en">get</span><span class="pl-kos">(</span><span class="pl-s">'http://localhost:8080'</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+<span class="pl-s1">http</span><span class="pl-kos">.</span><span class="pl-en">get</span><span class="pl-kos">(</span><span class="pl-s">'http://localhost:8080'</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+<span class="pl-c">// Prints:</span>
+<span class="pl-c">//   0: start</span>
+<span class="pl-c">//   1: start</span>
+<span class="pl-c">//   0: finish</span>
+<span class="pl-c">//   1: finish</span></pre></div>
+<p>在这个例子中，我们创建了一个 <code class="notranslate">AsyncLocalStorage</code> 实例，并使用中间件来为每个请求分配一个唯一 ID。使用 <code class="notranslate">run</code> 方法可以在当前异步执行上下文中绑定请求 ID，这样，在这个异步执行上下文创建的任何异步事件中，我们都可以通过 <code class="notranslate">getStore</code> 方法得到同一个 ID，而无需显式地将请求 ID 透传给每个函数。</p>
+<h2>实现原理</h2>
+<p><code class="notranslate">ALS</code> 的原理其实非常简单，下面以 <code class="notranslate">Node 18.13</code> 源码为例进行简要分析。</p>
+<p><code class="notranslate">ALS</code> 的源码中 js 部分在代码仓库的 <code class="notranslate">lib/async_hooks.js</code> 文件里，首先看 <code class="notranslate">run</code> 的实现：</p>
+<div class="highlight highlight-source-js"><pre class="notranslate"><span class="pl-en">run</span><span class="pl-kos">(</span><span class="pl-s1">store</span><span class="pl-kos">,</span> <span class="pl-s1">callback</span><span class="pl-kos">,</span> ...<span class="pl-s1">args</span><span class="pl-kos">)</span><span class="pl-kos"></span> <span class="pl-kos">{</span>
+    <span class="pl-c">// Avoid creation of an AsyncResource if store is already active</span>
+    <span class="pl-k">if</span> <span class="pl-kos">(</span><span class="pl-v">ObjectIs</span><span class="pl-kos">(</span><span class="pl-s1">store</span><span class="pl-kos">,</span> <span class="pl-smi">this</span><span class="pl-kos">.</span><span class="pl-en">getStore</span><span class="pl-kos">(</span><span class="pl-kos">)</span><span class="pl-kos">)</span><span class="pl-kos">)</span> <span class="pl-kos">{</span>
+      <span class="pl-k">return</span> <span class="pl-v">ReflectApply</span><span class="pl-kos">(</span><span class="pl-s1">callback</span><span class="pl-kos">,</span> <span class="pl-c1">null</span><span class="pl-kos">,</span> <span class="pl-s1">args</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+    <span class="pl-kos">}</span>
+
+    <span class="pl-smi">this</span><span class="pl-kos">.</span><span class="pl-en">_enable</span><span class="pl-kos">(</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+
+    <span class="pl-k">const</span> <span class="pl-s1">resource</span> <span class="pl-c1">=</span> <span class="pl-en">executionAsyncResource</span><span class="pl-kos">(</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+    <span class="pl-k">const</span> <span class="pl-s1">oldStore</span> <span class="pl-c1">=</span> <span class="pl-s1">resource</span><span class="pl-kos">[</span><span class="pl-smi">this</span><span class="pl-kos">.</span><span class="pl-c1">kResourceStore</span><span class="pl-kos">]</span><span class="pl-kos">;</span>
+
+    <span class="pl-s1">resource</span><span class="pl-kos">[</span><span class="pl-smi">this</span><span class="pl-kos">.</span><span class="pl-c1">kResourceStore</span><span class="pl-kos">]</span> <span class="pl-c1">=</span> <span class="pl-s1">store</span><span class="pl-kos">;</span>
+
+    <span class="pl-k">try</span> <span class="pl-kos">{</span>
+      <span class="pl-k">return</span> <span class="pl-v">ReflectApply</span><span class="pl-kos">(</span><span class="pl-s1">callback</span><span class="pl-kos">,</span> <span class="pl-c1">null</span><span class="pl-kos">,</span> <span class="pl-s1">args</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+    <span class="pl-kos">}</span> <span class="pl-k">finally</span> <span class="pl-kos">{</span>
+      <span class="pl-s1">resource</span><span class="pl-kos">[</span><span class="pl-smi">this</span><span class="pl-kos">.</span><span class="pl-c1">kResourceStore</span><span class="pl-kos">]</span> <span class="pl-c1">=</span> <span class="pl-s1">oldStore</span><span class="pl-kos">;</span>
+    <span class="pl-kos">}</span>
+<span class="pl-kos">}</span></pre></div>
+<p>其中,</p>
+<ul>
+<li>
+<p><code class="notranslate">this._enable()</code> 用于启动 <code class="notranslate">ALS</code> 的一个 init hook，这个稍后再聊。</p>
+</li>
+<li>
+<p><code class="notranslate">executionAsyncResource()</code>: 这是 <code class="notranslate">async_hooks</code> 模块的一个函数，它返回代表当前执行异步资源的对象。在 Node.js 中，<strong>每个</strong>异步操作都与一个 resource 对象相关联，它代表了操作的上下文。</p>
+</li>
+<li>
+<p><code class="notranslate">this.kResourceStore</code>: 这个其实是 ALS 构造函数里创建的一个 Symbol，用来往 resource 里存 store 时的 key。</p>
+</li>
+</ul>
+<p>可以看出，<code class="notranslate">run</code> 主要做了这样一件事情：备份当前的 <code class="notranslate">store</code>，然后替换为 run 函数入参提供的新 <code class="notranslate">store</code>，然后执行入参里的回调函数，这样，后续的异步操作都可以通过这个 resource 访问到新的 <code class="notranslate">store</code>。</p>
+<p>当然，回调函数里也能继续嵌套调用 run，而这里其实是借用函数的调用栈结构，实现了一个 store 的切换与重置。</p>
+<p>到这里，回调函数里的所有同步函数都能正确的通过 <code class="notranslate">getStore</code> 获得对应的存储：</p>
+<div class="highlight highlight-source-js"><pre class="notranslate">  <span class="pl-en">getStore</span><span class="pl-kos">(</span><span class="pl-kos">)</span> <span class="pl-kos">{</span>
+    <span class="pl-k">if</span> <span class="pl-kos">(</span><span class="pl-smi">this</span><span class="pl-kos">.</span><span class="pl-c1">enabled</span><span class="pl-kos">)</span> <span class="pl-kos">{</span>
+      <span class="pl-k">const</span> <span class="pl-s1">resource</span> <span class="pl-c1">=</span> <span class="pl-en">executionAsyncResource</span><span class="pl-kos">(</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+      <span class="pl-k">return</span> <span class="pl-s1">resource</span><span class="pl-kos">[</span><span class="pl-smi">this</span><span class="pl-kos">.</span><span class="pl-c1">kResourceStore</span><span class="pl-kos">]</span><span class="pl-kos">;</span>
+    <span class="pl-kos">}</span>
+  <span class="pl-kos">}</span></pre></div>
+<p>不过，万一回调里开启了新的异步操作呢？这时executionAsyncResource() 会得到一个全新的 resource。因此，我们需要一个机制去在调用处传递 resource 里的 store。</p>
+<p>这其实是通过 <code class="notranslate">async_hook</code> API 来实现的，具体来说，node 在全局维护了一个 store 列表：</p>
+<div class="highlight highlight-source-js"><pre class="notranslate"><span class="pl-k">const</span> <span class="pl-s1">storageList</span> <span class="pl-c1">=</span> <span class="pl-kos">[</span><span class="pl-kos">]</span><span class="pl-kos">;</span>
+<span class="pl-k">const</span> <span class="pl-s1">storageHook</span> <span class="pl-c1">=</span> <span class="pl-en">createHook</span><span class="pl-kos">(</span><span class="pl-kos">{</span>
+  <span class="pl-en">init</span><span class="pl-kos">(</span><span class="pl-s1">asyncId</span><span class="pl-kos">,</span> <span class="pl-s1">type</span><span class="pl-kos">,</span> <span class="pl-s1">triggerAsyncId</span><span class="pl-kos">,</span> <span class="pl-s1">resource</span><span class="pl-kos">)</span> <span class="pl-kos">{</span>
+    <span class="pl-k">const</span> <span class="pl-s1">currentResource</span> <span class="pl-c1">=</span> <span class="pl-en">executionAsyncResource</span><span class="pl-kos">(</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+    <span class="pl-c">// Value of currentResource is always a non null object</span>
+    <span class="pl-k">for</span> <span class="pl-kos">(</span><span class="pl-k">let</span> <span class="pl-s1">i</span> <span class="pl-c1">=</span> <span class="pl-c1">0</span><span class="pl-kos">;</span> <span class="pl-s1">i</span> <span class="pl-c1">&lt;</span> <span class="pl-s1">storageList</span><span class="pl-kos">.</span><span class="pl-c1">length</span><span class="pl-kos">;</span> <span class="pl-c1">++</span><span class="pl-s1">i</span><span class="pl-kos">)</span> <span class="pl-kos">{</span>
+      <span class="pl-s1">storageList</span><span class="pl-kos">[</span><span class="pl-s1">i</span><span class="pl-kos">]</span><span class="pl-kos">.</span><span class="pl-en">_propagate</span><span class="pl-kos">(</span><span class="pl-s1">resource</span><span class="pl-kos">,</span> <span class="pl-s1">currentResource</span><span class="pl-kos">,</span> <span class="pl-s1">type</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+    <span class="pl-kos">}</span>
+  <span class="pl-kos">}</span>
+<span class="pl-kos">}</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+
+<span class="pl-c">// als._enable()</span>
+  <span class="pl-en">_enable</span><span class="pl-kos">(</span><span class="pl-kos">)</span><span class="pl-kos"></span> <span class="pl-kos">{</span>
+    <span class="pl-k">if</span> <span class="pl-kos">(</span><span class="pl-c1">!</span><span class="pl-smi">this</span><span class="pl-kos">.</span><span class="pl-c1">enabled</span><span class="pl-kos">)</span> <span class="pl-kos">{</span>
+      <span class="pl-smi">this</span><span class="pl-kos">.</span><span class="pl-c1">enabled</span> <span class="pl-c1">=</span> <span class="pl-c1">true</span><span class="pl-kos">;</span>
+      <span class="pl-v">ArrayPrototypePush</span><span class="pl-kos">(</span><span class="pl-s1">storageList</span><span class="pl-kos">,</span> <span class="pl-smi">this</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+      <span class="pl-s1">storageHook</span><span class="pl-kos">.</span><span class="pl-en">enable</span><span class="pl-kos">(</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+    <span class="pl-kos">}</span>
+  <span class="pl-kos">}</span></pre></div>
+<p>如上面的代码所示，<code class="notranslate">ALS</code> 创建了一个 <code class="notranslate">init</code> hook，首次调用 <code class="notranslate">run</code> 时，会把当前 store 对象存入全局 store 列表并启动 hook。这样，每次进入新的异步操作前，会将旧 resource 中的所有 store 实例传递给新的 resource，这样在异步操作内，也能正常通过 <code class="notranslate">getStore</code> 获取 store 啦！</p>
+<p>至于剩下两个函数 <code class="notranslate">enterWith</code> 和 <code class="notranslate">disable</code>，实现比较简单。扫一眼代码就大概知道是在干嘛了：</p>
+<div class="highlight highlight-source-js"><pre class="notranslate"><span class="pl-en">enterWith</span><span class="pl-kos">(</span><span class="pl-s1">store</span><span class="pl-kos">)</span><span class="pl-kos"></span> <span class="pl-kos">{</span>
+  <span class="pl-smi">this</span><span class="pl-kos">.</span><span class="pl-en">_enable</span><span class="pl-kos">(</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+  <span class="pl-k">const</span> <span class="pl-s1">resource</span> <span class="pl-c1">=</span> <span class="pl-en">executionAsyncResource</span><span class="pl-kos">(</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+  <span class="pl-s1">resource</span><span class="pl-kos">[</span><span class="pl-smi">this</span><span class="pl-kos">.</span><span class="pl-c1">kResourceStore</span><span class="pl-kos">]</span> <span class="pl-c1">=</span> <span class="pl-s1">store</span><span class="pl-kos">;</span>
+<span class="pl-kos">}</span>
+
+
+<span class="pl-en">disable</span><span class="pl-kos">(</span><span class="pl-kos">)</span><span class="pl-kos"></span> <span class="pl-kos">{</span>
+    <span class="pl-k">if</span> <span class="pl-kos">(</span><span class="pl-smi">this</span><span class="pl-kos">.</span><span class="pl-c1">enabled</span><span class="pl-kos">)</span> <span class="pl-kos">{</span>
+      <span class="pl-smi">this</span><span class="pl-kos">.</span><span class="pl-c1">enabled</span> <span class="pl-c1">=</span> <span class="pl-c1">false</span><span class="pl-kos">;</span>
+      <span class="pl-c">// If this.enabled, the instance must be in storageList</span>
+      <span class="pl-v">ArrayPrototypeSplice</span><span class="pl-kos">(</span><span class="pl-s1">storageList</span><span class="pl-kos">,</span>
+                           <span class="pl-v">ArrayPrototypeIndexOf</span><span class="pl-kos">(</span><span class="pl-s1">storageList</span><span class="pl-kos">,</span> <span class="pl-smi">this</span><span class="pl-kos">)</span><span class="pl-kos">,</span> <span class="pl-c1">1</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+      <span class="pl-k">if</span> <span class="pl-kos">(</span><span class="pl-s1">storageList</span><span class="pl-kos">.</span><span class="pl-c1">length</span> <span class="pl-c1">===</span> <span class="pl-c1">0</span><span class="pl-kos">)</span> <span class="pl-kos">{</span>
+        <span class="pl-s1">storageHook</span><span class="pl-kos">.</span><span class="pl-en">disable</span><span class="pl-kos">(</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+      <span class="pl-kos">}</span>
+    <span class="pl-kos">}</span>
+  <span class="pl-kos">}</span></pre></div>
+<h2>FX-CODE 里的应用</h2>
+<p>fx-code 工程里的 nstarter-core 依赖里使用 <code class="notranslate">ALS</code> 封装了一个异步上下文管理器，主要用来维护一个请求的 traceId。另外 james 之前做 metrics 的时候也用它来存储一些请求范围的 trace 信息。</p>
+<p>实现上来说，在 <code class="notranslate">node_modules/nstarter-core/src/context/provider.ts</code> 里定义了 <code class="notranslate">ContextProvider</code> 类，其中 <code class="notranslate">getMiddleware</code> 返回一个中间件，将 next 函数包括在了 als 的上下文里。这样每一个新的请求，都能通过静态方法 <code class="notranslate">ContextProvider.getContext()</code> 获取请求上下文了：</p>
+<div class="highlight highlight-source-ts"><pre class="notranslate"><span class="pl-k">private</span> <span class="pl-en">getMiddleware</span><span class="pl-kos">(</span><span class="pl-s1">options</span>: <span class="pl-smi">IContextMiddlewareOptions</span><span class="pl-kos">)</span>: <span class="pl-smi">RequestHandler</span> <span class="pl-kos">{</span>
+    <span class="pl-k">const</span> <span class="pl-s1">opts</span>: <span class="pl-smi">IContextMiddlewareOptions</span> <span class="pl-c1">=</span> <span class="pl-kos">{</span>
+        <span class="pl-c1">idGenerator</span>: <span class="pl-s1">defaultIdGenerator</span><span class="pl-kos">,</span>
+        ...<span class="pl-s1">options</span>
+    <span class="pl-kos">}</span><span class="pl-kos">;</span>
+    <span class="pl-k">return</span> <span class="pl-kos">(</span><span class="pl-s1">req</span>: <span class="pl-smi">Request</span><span class="pl-kos">,</span> <span class="pl-s1">res</span>: <span class="pl-smi">Response</span><span class="pl-kos">,</span> <span class="pl-s1">next</span>: <span class="pl-smi">NextFunction</span><span class="pl-kos">)</span> <span class="pl-c1">=&gt;</span>
+        <span class="pl-smi">this</span><span class="pl-kos">.</span><span class="pl-c1">_localStorage</span><span class="pl-kos">.</span><span class="pl-en">run</span><span class="pl-kos">(</span><span class="pl-k">new</span> <span class="pl-smi">this</span><span class="pl-kos">.</span><span class="pl-c1">_Context</span><span class="pl-kos">(</span><span class="pl-kos">)</span><span class="pl-kos">,</span> <span class="pl-kos">(</span><span class="pl-kos">)</span> <span class="pl-c1">=&gt;</span> <span class="pl-kos">{</span>
+            <span class="pl-k">const</span> <span class="pl-s1">context</span> <span class="pl-c1">=</span> <span class="pl-smi">this</span><span class="pl-kos">.</span><span class="pl-c1">context</span><span class="pl-kos">;</span>
+            <span class="pl-k">const</span> <span class="pl-s1">traceId</span> <span class="pl-c1">=</span> <span class="pl-s1">opts</span><span class="pl-kos">.</span><span class="pl-en">idGenerator</span><span class="pl-kos">?.</span><span class="pl-kos">(</span><span class="pl-s1">req</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+            <span class="pl-k">if</span> <span class="pl-kos">(</span><span class="pl-s1">context</span> <span class="pl-c1">&amp;&amp;</span> <span class="pl-s1">traceId</span><span class="pl-kos">)</span> <span class="pl-kos">{</span>
+                <span class="pl-s1">context</span><span class="pl-kos">.</span><span class="pl-en">setTraceId</span><span class="pl-kos">(</span><span class="pl-s1">traceId</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+            <span class="pl-kos">}</span>
+            <span class="pl-k">return</span> <span class="pl-en">next</span><span class="pl-kos">(</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+        <span class="pl-kos">}</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+<span class="pl-kos">}</span>
+
+<span class="pl-c">/**</span>
+<span class="pl-c"> * 获取上下文对象</span>
+<span class="pl-c"> */</span>
+<span class="pl-k">private</span> <span class="pl-s1">get</span> <span class="pl-en">context</span><span class="pl-kos">(</span><span class="pl-kos">)</span>: <span class="pl-smi">T</span> <span class="pl-c1">|</span> <span class="pl-c1">undefined</span> <span class="pl-kos">{</span>
+    <span class="pl-k">return</span> <span class="pl-smi">this</span><span class="pl-kos">.</span><span class="pl-c1">_localStorage</span><span class="pl-kos">.</span><span class="pl-en">getStore</span><span class="pl-kos">(</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+<span class="pl-kos">}</span>
+
+<span class="pl-k">public</span> <span class="pl-s1">static</span> <span class="pl-s1">getContext</span><span class="pl-c1">&lt;</span><span class="pl-smi">T</span> <span class="pl-k">extends</span> <span class="pl-smi">BaseContext</span><span class="pl-c1">&gt;</span><span class="pl-kos">(</span><span class="pl-kos">)</span>: <span class="pl-smi">T</span> <span class="pl-c1">|</span> <span class="pl-c1">undefined</span> <span class="pl-kos">{</span>
+    <span class="pl-c1">try</span> <span class="pl-kos">{</span>
+        <span class="pl-c1">return</span> <span class="pl-smi">ContextProvider</span><span class="pl-kos">.</span><span class="pl-c1">getInstance</span><span class="pl-c1">&lt;</span><span class="pl-smi">T</span><span class="pl-c1">&gt;</span><span class="pl-kos">(</span><span class="pl-kos">)</span><span class="pl-kos">.</span><span class="pl-c1">context</span><span class="pl-kos">;</span>
+    <span class="pl-kos">}</span> <span class="pl-s1">catch</span> <span class="pl-kos">(</span><span class="pl-smi">err</span><span class="pl-kos">)</span> <span class="pl-kos">{</span>
+        <span class="pl-c1">return</span><span class="pl-kos">;</span>
+    <span class="pl-kos">}</span>
+<span class="pl-kos">}</span></pre></div>
+<h2>上下文丢失的问题</h2>
+<p>在大多数情况下， <code class="notranslate">AsyncLocalStorage</code> 可以正常工作，对于基于回调的函数，只需要使用 <a href="https://nodejs.org/docs/latest-v18.x/api/util.html#utilpromisifyoriginal" rel="nofollow"><code class="notranslate">[util.promisify()](https://nodejs.org/docs/latest-v18.x/api/util.html#utilpromisifyoriginal)</code></a> 将其转换为 <code class="notranslate">Promise</code> 就可以了。</p>
+<p>在少数情况下可能会发生上下文丢失，这时只需要通过 <code class="notranslate">AsyncResource</code> API 恰当地绑定好上下文即可。当你发现上下文丢失时，可以通过在适当的位置执行 <code class="notranslate">getStore</code> 来推理造出上下文丢失的函数调用并解决修复。</p>
+<p>例如，由 <code class="notranslate">EventEmitter</code> 触发的事件监听器可能在调用 <code class="notranslate">eventEmitter.on()</code> 时的执行上下文中运行。下面展示了一个问题场景以及对应的修复方式，其他类似的基于事件驱动的场景也可以用同样的方式修复：</p>
+<div class="highlight highlight-source-js"><pre class="notranslate"><span class="pl-k">import</span> <span class="pl-kos">{</span> <span class="pl-s1">createServer</span> <span class="pl-kos">}</span> <span class="pl-k">from</span> <span class="pl-s">'node:http'</span><span class="pl-kos">;</span>
+<span class="pl-k">import</span> <span class="pl-kos">{</span> <span class="pl-v">AsyncResource</span><span class="pl-kos">,</span> <span class="pl-s1">executionAsyncId</span> <span class="pl-kos">}</span> <span class="pl-k">from</span> <span class="pl-s">'node:async_hooks'</span><span class="pl-kos">;</span>
+
+<span class="pl-k">const</span> <span class="pl-s1">server</span> <span class="pl-c1">=</span> <span class="pl-en">createServer</span><span class="pl-kos">(</span><span class="pl-kos">(</span><span class="pl-s1">req</span><span class="pl-kos">,</span> <span class="pl-s1">res</span><span class="pl-kos">)</span> <span class="pl-c1">=&gt;</span> <span class="pl-kos">{</span>
+  <span class="pl-s1">req</span><span class="pl-kos">.</span><span class="pl-en">on</span><span class="pl-kos">(</span><span class="pl-s">'close'</span><span class="pl-kos">,</span> <span class="pl-v">AsyncResource</span><span class="pl-kos">.</span><span class="pl-en">bind</span><span class="pl-kos">(</span><span class="pl-kos">(</span><span class="pl-kos">)</span> <span class="pl-c1">=&gt;</span> <span class="pl-kos">{</span>
+    <span class="pl-c">// Execution context is bound to the current outer scope.</span>
+  <span class="pl-kos">}</span><span class="pl-kos">)</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+  <span class="pl-s1">req</span><span class="pl-kos">.</span><span class="pl-en">on</span><span class="pl-kos">(</span><span class="pl-s">'close'</span><span class="pl-kos">,</span> <span class="pl-kos">(</span><span class="pl-kos">)</span> <span class="pl-c1">=&gt;</span> <span class="pl-kos">{</span>
+    <span class="pl-c">// Execution context is bound to the scope that caused 'close' to emit.</span>
+  <span class="pl-kos">}</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+  <span class="pl-s1">res</span><span class="pl-kos">.</span><span class="pl-en">end</span><span class="pl-kos">(</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
+<span class="pl-kos">}</span><span class="pl-kos">)</span><span class="pl-kos">.</span><span class="pl-en">listen</span><span class="pl-kos">(</span><span class="pl-c1">3000</span><span class="pl-kos">)</span><span class="pl-kos">;</span></pre></div></div>
+<div style="font-size:small;margin-top:8px;float:right;"></div>
+<button class="btn btn-block" type="button" onclick="openComments()" id="cmButton">评论</button>
+<div class="comments" id="comments"></div>
+</div>
+    <div id="footer">Copyright © <span id="year"></span><a href="https://winterggg.github.io/blog"> Winter Notes </a>
+<p>
+<span id="runday"></span>Powered by <a href="https://meekdai.com/Gmeek.html" target="_blank">Gmeek</a>
+</p>
+
+<script>
+if(""!=""){
+    var now=new Date();
+    var startSite=new Date("");
+    var diff=now.getTime()-startSite.getTime();
+    var diffDay=Math.floor(diff/(1000*60*60*24));
+    document.getElementById("year").innerHTML=now.getFullYear();
+    if(""!=""){document.getElementById("runday").innerHTML=" • "+"网站运行"+diffDay+"天"+" • ";}
+    else{document.getElementById("runday").innerHTML="网站运行"+diffDay+"天"+" • ";}
+}
+</script>
+</div>
+</body>
+<script>
+var IconList={'sun': 'M8 10.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM8 12a4 4 0 100-8 4 4 0 000 8zM8 0a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0V.75A.75.75 0 018 0zm0 13a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 018 13zM2.343 2.343a.75.75 0 011.061 0l1.06 1.061a.75.75 0 01-1.06 1.06l-1.06-1.06a.75.75 0 010-1.06zm9.193 9.193a.75.75 0 011.06 0l1.061 1.06a.75.75 0 01-1.06 1.061l-1.061-1.06a.75.75 0 010-1.061zM16 8a.75.75 0 01-.75.75h-1.5a.75.75 0 010-1.5h1.5A.75.75 0 0116 8zM3 8a.75.75 0 01-.75.75H.75a.75.75 0 010-1.5h1.5A.75.75 0 013 8zm10.657-5.657a.75.75 0 010 1.061l-1.061 1.06a.75.75 0 11-1.06-1.06l1.06-1.06a.75.75 0 011.06 0zm-9.193 9.193a.75.75 0 010 1.06l-1.06 1.061a.75.75 0 11-1.061-1.06l1.06-1.061a.75.75 0 011.061 0z', 'moon': 'M9.598 1.591a.75.75 0 01.785-.175 7 7 0 11-8.967 8.967.75.75 0 01.961-.96 5.5 5.5 0 007.046-7.046.75.75 0 01.175-.786zm1.616 1.945a7 7 0 01-7.678 7.678 5.5 5.5 0 107.678-7.678z', 'home': 'M6.906.664a1.749 1.749 0 0 1 2.187 0l5.25 4.2c.415.332.657.835.657 1.367v7.019A1.75 1.75 0 0 1 13.25 15h-3.5a.75.75 0 0 1-.75-.75V9H7v5.25a.75.75 0 0 1-.75.75h-3.5A1.75 1.75 0 0 1 1 13.25V6.23c0-.531.242-1.034.657-1.366l5.25-4.2Zm1.25 1.171a.25.25 0 0 0-.312 0l-5.25 4.2a.25.25 0 0 0-.094.196v7.019c0 .138.112.25.25.25H5.5V8.25a.75.75 0 0 1 .75-.75h3.5a.75.75 0 0 1 .75.75v5.25h2.75a.25.25 0 0 0 .25-.25V6.23a.25.25 0 0 0-.094-.195Z', 'github': 'M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z'};
+var utterancesLoad=0;
+if(localStorage.getItem("meek_theme")==null){localStorage.setItem("meek_theme","light");changeLight();}
+else if(localStorage.getItem("meek_theme")=="dark"){changeDark();}
+else if(localStorage.getItem("meek_theme")=="light"){changeLight();}
+
+function changeDark(){
+    document.getElementsByTagName("html")[0].attributes.getNamedItem("data-color-mode").value="dark";
+    document.getElementById("themeSwitch").setAttribute("d",value=IconList["moon"]);
+    document.getElementById("themeSwitch").parentNode.style.color="#00f0ff";
+    if(utterancesLoad==1){utterancesTheme("dark-blue");}
+}
+function changeLight(){
+    document.getElementsByTagName("html")[0].attributes.getNamedItem("data-color-mode").value="light";
+    document.getElementById("themeSwitch").setAttribute("d",value=IconList["sun"]);
+    document.getElementById("themeSwitch").parentNode.style.color="#ff5000";
+    if(utterancesLoad==1){utterancesTheme("github-light");}
+}
+function modeSwitch(){
+    if(document.getElementsByTagName("html")[0].attributes[0].value=="light"){changeDark();localStorage.setItem("meek_theme","dark");}
+    else{changeLight();localStorage.setItem("meek_theme","light");}
+}
+function utterancesTheme(theme){
+    const message = {type: 'set-theme',theme: theme};
+    const iframe = document.getElementsByClassName('utterances-frame')[0];
+    iframe.contentWindow.postMessage(message, 'https://utteranc.es');
+}
+
+console.log("\n %c Gmeek last %c https://github.com/Meekdai/Gmeek \n\n", "color: #fff; background-image: linear-gradient(90deg, rgb(47, 172, 178) 0%, rgb(45, 190, 96) 100%); padding:5px 1px;", "background-image: linear-gradient(90deg, rgb(45, 190, 96) 0%, rgb(255, 255, 255) 100%); padding:5px 0;");
+</script>
+
+<script>
+document.getElementById("pathHome").setAttribute("d",IconList["home"]);
+document.getElementById("pathIssue").setAttribute("d",IconList["github"]);
+
+
+function openComments(){
+    cm=document.getElementById("comments");
+    cmButton=document.getElementById("cmButton");
+    cmButton.innerHTML="loading";
+    span=document.createElement("span");
+    span.setAttribute("class","AnimatedEllipsis");
+    cmButton.appendChild(span);
+
+    script=document.createElement("script");
+    script.setAttribute("src","https://utteranc.es/client.js");
+    script.setAttribute("repo","winterggg/blog");
+    script.setAttribute("issue-term","title");
+    if(localStorage.getItem("meek_theme")=="dark"){script.setAttribute("theme","dark-blue");}
+    else{script.setAttribute("theme","github-light");}
+    script.setAttribute("crossorigin","anonymous");
+    script.setAttribute("async","");
+    cm.appendChild(script);
+
+    int=self.setInterval("iFrameLoading()",200);
+}
+
+function iFrameLoading(){
+    var utterances=document.getElementsByClassName('utterances');
+    if(utterances.length==1){
+        if(utterances[0].style.height!=""){
+            utterancesLoad=1;
+            int=window.clearInterval(int);
+            document.getElementById("cmButton").style.display="none";
+            console.log("utterances Load OK");
+        }
+    }
+}
+
+</script>
+
+
+
+</html>
