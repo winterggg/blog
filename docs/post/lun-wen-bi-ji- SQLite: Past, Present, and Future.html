@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html data-color-mode="light" data-dark-theme="dark" data-light-theme="light" lang="zh-CN">
+<head>
+    <meta content="text/html; charset=utf-8" http-equiv="content-type" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <link href="//cdn.staticfile.net/Primer/21.0.7/primer.css" rel="stylesheet" />
+    <link rel="icon" href="https://avatars.githubusercontent.com/u/92662575?v=4">
+    <script>
+        if(localStorage.getItem("meek_theme")==null){}
+        else if(localStorage.getItem("meek_theme")=="dark"){document.getElementsByTagName("html")[0].attributes.getNamedItem("data-color-mode").value="dark";}
+        else if(localStorage.getItem("meek_theme")=="light"){document.getElementsByTagName("html")[0].attributes.getNamedItem("data-color-mode").value="light";}
+    </script>
+    
+<meta name="description" content="论文笔记 SQLite: Past, Present, and Future">
+<title>论文笔记 SQLite: Past, Present, and Future</title>
+
+
+</head>
+<style>
+body{box-sizing: border-box;min-width: 200px;max-width: 900px;margin: 20px auto;padding: 45px;font-size: 16px;font-family: sans-serif;line-height: 1.25;}
+#header{display:flex;padding-bottom:8px;border-bottom: 1px solid var(--borderColor-muted, var(--color-border-muted));margin-bottom: 16px;}
+#footer {margin-top:64px; text-align: center;font-size: small;}
+
+</style>
+
+<style>
+.postTitle{margin: auto 0;font-size:40px;font-weight:bold;}
+.title-right{display:flex;margin:auto 0 0 auto;}
+.title-right .circle{padding: 14px 16px;margin-right:8px;}
+#postBody{border-bottom: 1px solid var(--color-border-default);padding-bottom:36px;}
+#postBody hr{height:2px;}
+#cmButton{height:48px;margin-top:48px;}
+#comments{margin-top:64px;}
+.g-emoji{font-size:24px;}
+@media (max-width: 600px) {
+    body {padding: 8px;}
+    .postTitle{font-size:24px;}
+}
+</style>
+
+
+
+
+<body>
+    <div id="header">
+<h1 class="postTitle">论文笔记 SQLite: Past, Present, and Future</h1>
+<div class="title-right">
+    
+    <a href="https://winterggg.github.io/blog"><button id="buttonHome" class="btn btn-invisible circle" title="首页">
+        <svg class="octicon" width="16" height="16">
+            <path id="pathHome" fill-rule="evenodd"></path>
+        </svg>
+    </button></a>
+
+    
+    <a href="https://github.com/winterggg/blog/issues/9" target="_blank"><button class="btn btn-invisible circle" title="Issue">
+        <svg class="octicon" width="16" height="16">
+            <path id="pathIssue" fill-rule="evenodd"></path>
+        </svg>
+    </button></a>
+    
+
+    <button class="btn btn-invisible circle" onclick="modeSwitch();" title="切换主题">
+        <svg class="octicon" width="16" height="16" >
+            <path id="themeSwitch" fill-rule="evenodd"></path>
+        </svg>
+    </button>
+
+</div>
+</div>
+    <div id="content">
+<div class="markdown-body" id="postBody"><h1>论文笔记 SQLite: Past, Present, and Future</h1>
+<ul>
+<li>
+<p>论文名称：SQLite: past, present, and future</p>
+</li>
+<li>
+<p>作者单位：威斯康星大学麦迪逊分校 (University of Wisconsin-Madison)的三名研究人员和 Sqlite 社区的三名贡献者</p>
+</li>
+<li>
+<p>发表期刊：VLDB Endowment（数据库领域三大顶会之一），01 August 2022</p>
+</li>
+</ul>
+<h1>TL; DR</h1>
+<p>这篇论文 novelty 比较一般，主要跑了几个 benchmark 然后基于测试场景提出了一个奇奇怪怪的优化方法. 但对 SQLite 的一些介绍和分析比较全面，因此也是比较值得阅读的.</p>
+<h1>历史与架构</h1>
+<h2>历史</h2>
+<p>SQLite自2000年首次发布以来，已成为最广泛部署的数据库引擎之一，存在于几乎所有智能手机、计算机、网络浏览器、电视和汽车中.</p>
+<p>它的普及归功于其跨平台，自包含和极小的 release 体积，可靠和快速.</p>
+<h2>引擎架构</h2>
+<h3>模块</h3>
+<p><a target="_blank" rel="noopener noreferrer" href="https://github.com/winterggg/blog/assets/92662575/1f972de5-607a-4398-9e71-3ae970095d88"><img width="490" alt="image-20240331192521985" src="https://github.com/winterggg/blog/assets/92662575/1f972de5-607a-4398-9e71-3ae970095d88" style="max-width: 100%;"></a></p>
+<p>如图，SQLite 使用了模块化的设计. 它的架构包括SQL编译器模块、核心模块、后端模块和一些辅助模块，如测试代码和实用工具.</p>
+<p><a target="_blank" rel="noopener noreferrer" href="https://github.com/winterggg/blog/assets/92662575/8f3480c9-9630-4679-b3f1-d976da2eb53a"><img width="339" alt="image-20240331193253026" src="https://github.com/winterggg/blog/assets/92662575/8f3480c9-9630-4679-b3f1-d976da2eb53a" style="max-width: 100%;"></a></p>
+<ul>
+<li>core modules. 核心模块负责接收和执行SQL语句.
+<ul>
+<li>SQLite 的虚拟机又叫 virtual database engine (VDBE)，是  SQLite 的核心. 其执行代码的过程其实类似于 JVM，略.</li>
+</ul>
+</li>
+<li>SQL compiler modules. SQL编译器模块将SQL语句转换为字节码程序，该程序可以由虚拟机执行.
+<ul>
+<li>可以把每个 SQL statement 看做一个源码. SQLite 就像一个编译器一样，拥有 Tokenizer、Parser 和 Code Generator，将 SQL statement 转换为 bytecode. Bytecode 如上图所示，包括 opcode 和 oprands，例如 Column 就是从当前行取某一列的值存入寄存器.</li>
+</ul>
+</li>
+<li>backend modules. 后端模块用于访问数据库页并与 OS 交互以持久化数据.
+<ul>
+<li>VDBE 高强度和 backend 交互，主要是在操作 B 树.</li>
+</ul>
+</li>
+<li>accessory modules. 包括超大规模的测试代码和一些实用工具，例如用于内存分配、字符串操作和随机数生成.</li>
+</ul>
+<h3>backend 细节</h3>
+<p><strong>B树</strong></p>
+<p>SQLite 数据库文件本质上是B树的集合. 分为两种：表B树和索引B树</p>
+<ul>
+<li>表B树（Table B-trees）：
+<ul>
+<li>使用64位有符号整数作为键（key）;</li>
+<li>数据存储在叶节点中.</li>
+</ul>
+</li>
+<li>索引B树（Index B-trees）：
+<ul>
+<li>使用任意键.</li>
+<li>不存储数据.</li>
+</ul>
+</li>
+</ul>
+<p><strong>数据库表的表示</strong></p>
+<ul>
+<li>数据库中每个表都由一个表B树表示.</li>
+<li>表B树的键是表的隐式<code class="notranslate">rowid</code>列.</li>
+<li>对于<code class="notranslate">INTEGER PRIMARY KEY</code>表，主键列取代<code class="notranslate">rowid</code>成为B树的键.</li>
+<li>声明为 <code class="notranslate">WITHOUT ROWID</code>的表是特殊情况：
+<ul>
+<li>这些表完全存储在索引B树中.</li>
+<li><code class="notranslate">WITHOUT ROWID</code>表的B树键由主键列组成，然后是表的所有剩余列.</li>
+</ul>
+</li>
+<li>数据库架构中的每个索引都有一个索引B树，除非索引已由表B树表示，如<code class="notranslate">INTEGER PRIMARY KEY</code>表的情况.</li>
+</ul>
+<p><strong>页缓存（Page Cache）</strong></p>
+<ul>
+<li>页缓存负责提供B树模块请求的数据页.</li>
+<li>页缓存还负责确保修改过的页能够安全且高效地刷新（flush）到稳定存储中.</li>
+</ul>
+<p><strong>操作系统接口</strong></p>
+<ul>
+<li>SQLite使用一个称为虚拟文件系统（VFS）的抽象对象来跨操作系统提供可移植性.</li>
+<li>SQLite为Unix和Windows操作系统提供了几种现成的VFS.</li>
+<li>可以通过创建 VFS 来支持新的操作系统或扩展SQLite的功能.</li>
+</ul>
+<p><strong>值提取</strong></p>
+<ul>
+<li><strong>灵活的类型系统</strong>：SQLite允许任何类型的数据存储在任何列中（INTEGER PRIMARY KEY列除外）.</li>
+<li><strong>列声明灵活性</strong>：SQLite中可以创建没有数据类型声明的列，如 <code class="notranslate">CREATE TABLE t (a, b, c);</code>.</li>
+<li><strong>类型信息存储</strong>：每个值旁边都会存储类型信息，SQLite记录分为头部和主体，头部包含数据类型编码，主体包含实际值.</li>
+<li><strong>值提取过程：</strong>
+<ul>
+<li><strong>查找过程</strong>：通过检查记录头部的指针，确定值的位置，头部包含每列数据类型的序列化类型码.</li>
+<li><strong>计算偏移量</strong>：SQLite遍历头部的类型码，累加每个值的大小来计算所需值的偏移量.</li>
+</ul>
+</li>
+<li>这种方式（无数据类型声明）的一个缺点是不能很好的压缩，占用空间也比较大，COLUMN 字节码指令的效率也相对较低.</li>
+</ul>
+<h3>事务</h3>
+<p><strong>事务性数据库引擎</strong></p>
+<ul>
+<li>SQLite 是一个事务性数据库引擎.</li>
+<li>它提供了原子性（Atomicity）、一致性（Consistency）、隔离性（Isolation）和持久性（Durability）的ACID保证.</li>
+<li><strong>SQLite 提供了 2 种可选的事务模式</strong>：回滚模式（Rollback Mode）和预写日志模式（Write-Ahead Log Mode, WAL）.</li>
+</ul>
+<p><strong>回滚模式（Rollback Mode）</strong></p>
+<ul>
+<li>开始事务时，SQLite获取数据库文件的共享锁.</li>
+<li>获取共享锁后，可以随意读取数据库页.</li>
+<li>如果事务涉及更改，SQLite将读锁升级为保留锁（reserved lock），阻止其他写入者，但允许读取者继续.</li>
+<li>更改前，SQLite创建回滚日志文件(rollback journal file).</li>
+<li>SQLite将每个将要修改的页的原始内容写入回滚日志，并在用户空间保留更新的页.</li>
+<li>提交事务时，SQLite将回滚日志刷新到稳定存储.</li>
+<li>然后获取数据库文件的排他锁，阻止读写者，并应用更改.</li>
+<li>更新的数据库页刷新到稳定存储后，回滚日志有多种失效方式，具体取决于日志模式：
+<ul>
+<li>在DELETE模式中，SQLite删除回滚日志.</li>
+<li>因为某些系统上删除文件代价高昂，SQLite也提供了其他日志模式.</li>
+<li>TRUNCATE模式下，回滚日志被截断而非删除.</li>
+<li>PERSIST模式下，回滚日志的头部被覆盖为零.</li>
+</ul>
+</li>
+<li>使回滚日志失效实际上等同于提交事务.</li>
+<li>最后，SQLite释放数据库文件的排他锁.</li>
+</ul>
+<p><strong>预写日志模式（Write-Ahead Log Mode, WAL）</strong></p>
+<ul>
+<li>概念上，WAL模式是回滚模式的反转.</li>
+<li>回滚模式中，SQLite将原始页写入回滚日志，修改后的页写入数据库文件.</li>
+<li>WAL模式保留数据库文件中的原始页，并将修改后的页附加到单独的WAL文件.</li>
+<li>WAL模式下，事务开始时记录WAL中最后一个有效提交记录的位置，称为结束标记(end mark).</li>
+<li>需要页时，SQLite在WAL中搜索结束标记之前该页的最新版本.</li>
+<li>如果WAL中没有该页，SQLite从数据库文件中检索.</li>
+<li>变更仅仅被追加到WAL的末尾. (即追加写)</li>
+<li>WAL增长超过指定大小<strong>会触发检查点</strong>，此时WAL中更新的页写回数据库文件.</li>
+<li>检查点后，WAL文件不会被删除，而是起始部分被后续事务覆写.</li>
+</ul>
+<p><strong>WAL模式的优势</strong></p>
+<ol>
+<li>增加并发性：读取者可以在写入者将更改提交到WAL时继续操作数据库.</li>
+<li>速度：通常更快，因为它需要较少的落盘操作，且写入操作更加顺序. （大概就是 commit 前可以享受内存的性能或者说追加写的性能）</li>
+</ol>
+<p><strong>WAL模式的劣势</strong></p>
+<ul>
+<li>为加速搜索WAL，SQLite在共享内存中创建WAL索引，这提高了读事务的性能，<strong>但要求所有读取者必须在同一台机器上.</strong></li>
+<li>因此，WAL模式不适用于网络文件系统.</li>
+<li>进入WAL模式后无法更改页大小.</li>
+<li>WAL模式增加了检查点操作的复杂性和存储WAL及WAL索引的额外文件</li>
+</ul>
+<h1>运行硬件和工作负载的演变</h1>
+<ul>
+<li>硬件的进步和软件需求的变化对SQLite提出了新的挑战.</li>
+<li>尽管SQLite主要用于OLTP，但它也被用于处理复杂的OLAP查询和边缘计算场景. （好像是对一个移动设备进行 trace 得出的结论）.</li>
+<li>SQLite 的行存储格式和执行引擎对许多 OLAP 操作来说并不是最佳选择</li>
+</ul>
+<p>作者这里举了个例子，说现在的科研人员其实都有这样一个广泛的需求，就是在上线大模型前在本地 in-process 的快速跑一些 OLAP 查询，比如比较常见的就是用 pandas 跑一些数据分析任务，但这些库的效率其实是很低的，作者认为 sqlite 这种嵌入式数据引擎在这方面未来大有可为.</p>
+<h1>性能测试和优化</h1>
+<p>这一部分主要是一些基准测试，图表比较多也有些无聊，这里摘一些主要结论.</p>
+<h2>TATP 吞吐测试（OLTP 领域）</h2>
+<ul>
+<li><strong>SQLite-WAL 性能：</strong>
+<ul>
+<li>在两种硬件配置上均显示出最高的吞吐量.</li>
+<li>在云服务器上：达到了10,000 TPS，相较于DuckDB的性能优势为：
+<ul>
+<li>小型数据库快了10倍.</li>
+<li>大型数据库快了500倍.</li>
+</ul>
+</li>
+<li>在树莓派上：
+<ul>
+<li>对于小型数据库比DuckDB快2倍.</li>
+<li>对于大型数据库快60倍.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><strong>SQLite-DELETE 性能：</strong>
+<ul>
+<li><strong>比SQLite-WAL慢</strong>，但在云服务器上显著快于DuckDB.</li>
+<li>在树莓派上：
+<ul>
+<li>DuckDB对小型数据库的性能略胜于SQLite-DELETE.</li>
+<li>对于大型数据库，SQLite-DELETE更快.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><strong>性能一致性：</strong>
+<ul>
+<li>SQLite-WAL和SQLite-DELETE不管数据库大小如何，都显示出了较为一致的性能.</li>
+<li>DuckDB的性能随数据库大小增加而下降.</li>
+</ul>
+</li>
+<li><strong>一般观察：</strong>
+<ul>
+<li>SQLite的性能归功于其多年来精心调优的事务处理机制.</li>
+<li>DuckDB，主要为OLAP和ETL工作负载设计，展现出在TATP（事务型）基准测试上的性能明显较差.</li>
+</ul>
+</li>
+<li><strong>挖坑：</strong>
+<ul>
+<li>作者在这里挖了个坑，说俺之后会研究下，这个性能差异是由于实现细节还是系统架构的根本差异.</li>
+</ul>
+</li>
+</ul>
+<h2>SSB 吞吐测试（OLAP）</h2>
+<ul>
+<li>DuckDB在所有查询中都明显快于SQLite.</li>
+<li>DuckDB在部分查询中的性能优势巨大，快了30-50倍；在部分查询中优势最小，快了3-8倍.</li>
+<li>SQLite在不同查询中的延迟差异较大.</li>
+<li>在树莓派上，SQLite最快的查询比最慢的快10倍；而DuckDB最快的查询仅比最慢的快3倍.</li>
+</ul>
+<h2>进一步优化</h2>
+<p>作者开启编译时选项 VDBE_PROFILE 输出了 VDBE 执行每个字节码指令所消耗的 CPU 周期数. 发现只有两个指令（SeekRowid和Column）占了大多数 CPU 周期：</p>
+<ul>
+<li>SeekRowid 指令在B树索引中搜索具有给定行ID的行.</li>
+<li>Column 指令从给定记录中提取列.</li>
+</ul>
+<p>然后分别水了下优化方法：</p>
+<ul>
+<li>针对第一个问题，发现是 join 效率的问题，解决方法是给 Inner loop 的表上了个布隆过滤器实现了一个 Lookahead Information Pass- ing (LIP)，这样在基准测试场景能避免一些 seekRowid... 另外还有 hash Joins 的方法，但可以预见的内存消耗不可控，抛了.</li>
+<li>针对第二个问题，作者想了几个办法但由于会担心破坏稳定性，抛了（原话）</li>
+</ul>
+<h2>Blob 测试</h2>
+<p>就是测试下二进制文件存储，和 fread/fdatasync 还有 duckdb 测试，感觉比较迷我直接跳了.</p>
+<h1>一些有意思的信息</h1>
+<ol>
+<li>最初作为Tcl编程语言的扩展打包，SQLite诞生于对在另一个独立进程中运行的数据库服务器进行调试时的沮丧之情.</li>
+<li>据估计，目前可能有超过<strong>一万亿</strong>个正在使用的SQLite数据库. 据估计，SQLite是最广泛部署的软件库之一.</li>
+<li>SQLite 是一个真正的工业级别数据库：SQLite 代码是一个 15 万行的单个 C 语言，但测试代码和脚本居然有九千多万行. 每行SQLite代码中有超过600行的测试代码. 测试覆盖库中100%的分支. 测试套件非常多样化，包括模糊测试、边界值测试、回归测试以及模拟操作系统崩溃、断电、I/O错误和内存不足等各种情况的测试.</li>
+<li>由于 SQLite 的变态测试覆盖率，给 SQLite 添加功能变得非常惬意，不用太担心对现有功能造成影响.</li>
+<li>删除操作比其他语句更加耗费资源，平均每个语句约为4毫秒.</li>
+<li>对于排序大量数据，SQLite使用可选的多线程外部合并排序算法.</li>
+<li>测试技巧：测试前可以用 SELECT * query populate 以下 buffer pool 以及 测试前可以先预热几秒钟再统计.</li>
+<li>sqlite 文件格式是美国国会图书馆推荐的数字内容保存格式.</li>
+<li>SQLite也有广泛的文档和注释，这有助于新开发人员快速理解SQLite的架构.</li>
+</ol></div>
+<div style="font-size:small;margin-top:8px;float:right;"></div>
+<button class="btn btn-block" type="button" onclick="openComments()" id="cmButton">评论</button>
+<div class="comments" id="comments"></div>
+</div>
+    <div id="footer">Copyright © <span id="year"></span><a href="https://winterggg.github.io/blog"> Winter Notes </a>
+<p>
+<span id="runday"></span>Powered by <a href="https://meekdai.com/Gmeek.html" target="_blank">Gmeek</a>
+</p>
+
+<script>
+if(""!=""){
+    var now=new Date();
+    var startSite=new Date("");
+    var diff=now.getTime()-startSite.getTime();
+    var diffDay=Math.floor(diff/(1000*60*60*24));
+    document.getElementById("year").innerHTML=now.getFullYear();
+    if(""!=""){document.getElementById("runday").innerHTML=" • "+"网站运行"+diffDay+"天"+" • ";}
+    else{document.getElementById("runday").innerHTML="网站运行"+diffDay+"天"+" • ";}
+}
+</script>
+</div>
+</body>
+<script>
+var IconList={'sun': 'M8 10.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM8 12a4 4 0 100-8 4 4 0 000 8zM8 0a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0V.75A.75.75 0 018 0zm0 13a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 018 13zM2.343 2.343a.75.75 0 011.061 0l1.06 1.061a.75.75 0 01-1.06 1.06l-1.06-1.06a.75.75 0 010-1.06zm9.193 9.193a.75.75 0 011.06 0l1.061 1.06a.75.75 0 01-1.06 1.061l-1.061-1.06a.75.75 0 010-1.061zM16 8a.75.75 0 01-.75.75h-1.5a.75.75 0 010-1.5h1.5A.75.75 0 0116 8zM3 8a.75.75 0 01-.75.75H.75a.75.75 0 010-1.5h1.5A.75.75 0 013 8zm10.657-5.657a.75.75 0 010 1.061l-1.061 1.06a.75.75 0 11-1.06-1.06l1.06-1.06a.75.75 0 011.06 0zm-9.193 9.193a.75.75 0 010 1.06l-1.06 1.061a.75.75 0 11-1.061-1.06l1.06-1.061a.75.75 0 011.061 0z', 'moon': 'M9.598 1.591a.75.75 0 01.785-.175 7 7 0 11-8.967 8.967.75.75 0 01.961-.96 5.5 5.5 0 007.046-7.046.75.75 0 01.175-.786zm1.616 1.945a7 7 0 01-7.678 7.678 5.5 5.5 0 107.678-7.678z', 'home': 'M6.906.664a1.749 1.749 0 0 1 2.187 0l5.25 4.2c.415.332.657.835.657 1.367v7.019A1.75 1.75 0 0 1 13.25 15h-3.5a.75.75 0 0 1-.75-.75V9H7v5.25a.75.75 0 0 1-.75.75h-3.5A1.75 1.75 0 0 1 1 13.25V6.23c0-.531.242-1.034.657-1.366l5.25-4.2Zm1.25 1.171a.25.25 0 0 0-.312 0l-5.25 4.2a.25.25 0 0 0-.094.196v7.019c0 .138.112.25.25.25H5.5V8.25a.75.75 0 0 1 .75-.75h3.5a.75.75 0 0 1 .75.75v5.25h2.75a.25.25 0 0 0 .25-.25V6.23a.25.25 0 0 0-.094-.195Z', 'github': 'M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z'};
+var utterancesLoad=0;
+if(localStorage.getItem("meek_theme")==null){localStorage.setItem("meek_theme","light");changeLight();}
+else if(localStorage.getItem("meek_theme")=="dark"){changeDark();}
+else if(localStorage.getItem("meek_theme")=="light"){changeLight();}
+
+function changeDark(){
+    document.getElementsByTagName("html")[0].attributes.getNamedItem("data-color-mode").value="dark";
+    document.getElementById("themeSwitch").setAttribute("d",value=IconList["moon"]);
+    document.getElementById("themeSwitch").parentNode.style.color="#00f0ff";
+    if(utterancesLoad==1){utterancesTheme("dark-blue");}
+}
+function changeLight(){
+    document.getElementsByTagName("html")[0].attributes.getNamedItem("data-color-mode").value="light";
+    document.getElementById("themeSwitch").setAttribute("d",value=IconList["sun"]);
+    document.getElementById("themeSwitch").parentNode.style.color="#ff5000";
+    if(utterancesLoad==1){utterancesTheme("github-light");}
+}
+function modeSwitch(){
+    if(document.getElementsByTagName("html")[0].attributes[0].value=="light"){changeDark();localStorage.setItem("meek_theme","dark");}
+    else{changeLight();localStorage.setItem("meek_theme","light");}
+}
+function utterancesTheme(theme){
+    const message = {type: 'set-theme',theme: theme};
+    const iframe = document.getElementsByClassName('utterances-frame')[0];
+    iframe.contentWindow.postMessage(message, 'https://utteranc.es');
+}
+
+console.log("\n %c Gmeek last %c https://github.com/Meekdai/Gmeek \n\n", "color: #fff; background-image: linear-gradient(90deg, rgb(47, 172, 178) 0%, rgb(45, 190, 96) 100%); padding:5px 1px;", "background-image: linear-gradient(90deg, rgb(45, 190, 96) 0%, rgb(255, 255, 255) 100%); padding:5px 0;");
+</script>
+
+<script>
+document.getElementById("pathHome").setAttribute("d",IconList["home"]);
+document.getElementById("pathIssue").setAttribute("d",IconList["github"]);
+
+
+function openComments(){
+    cm=document.getElementById("comments");
+    cmButton=document.getElementById("cmButton");
+    cmButton.innerHTML="loading";
+    span=document.createElement("span");
+    span.setAttribute("class","AnimatedEllipsis");
+    cmButton.appendChild(span);
+
+    script=document.createElement("script");
+    script.setAttribute("src","https://utteranc.es/client.js");
+    script.setAttribute("repo","winterggg/blog");
+    script.setAttribute("issue-term","title");
+    if(localStorage.getItem("meek_theme")=="dark"){script.setAttribute("theme","dark-blue");}
+    else{script.setAttribute("theme","github-light");}
+    script.setAttribute("crossorigin","anonymous");
+    script.setAttribute("async","");
+    cm.appendChild(script);
+
+    int=self.setInterval("iFrameLoading()",200);
+}
+
+function iFrameLoading(){
+    var utterances=document.getElementsByClassName('utterances');
+    if(utterances.length==1){
+        if(utterances[0].style.height!=""){
+            utterancesLoad=1;
+            int=window.clearInterval(int);
+            document.getElementById("cmButton").style.display="none";
+            console.log("utterances Load OK");
+        }
+    }
+}
+
+</script>
+
+
+
+</html>
