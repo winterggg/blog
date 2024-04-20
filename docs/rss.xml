@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<rss xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/" version="2.0"><channel><title>Winter Notes</title><link>https://winterggg.github.io/blog</link><description>不是博客，是个文摘</description><copyright>Winter Notes</copyright><docs>http://www.rssboard.org/rss-specification</docs><generator>python-feedgen</generator><image><url>https://avatars.githubusercontent.com/u/92662575?v=4</url><title>avatar</title><link>https://winterggg.github.io/blog</link></image><lastBuildDate>Sat, 20 Apr 2024 15:35:14 +0000</lastBuildDate><managingEditor>Winter Notes</managingEditor><ttl>60</ttl><webMaster>Winter Notes</webMaster><item><title>Think twice, code once!</title><link>https://winterggg.github.io/blog/post/Think%20twice%2C%20code%20once%21.html</link><description># Think twice, code once!&#13;
+<rss xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/" version="2.0"><channel><title>Winter Notes</title><link>https://winterggg.github.io/blog</link><description>不是博客，是个文摘</description><copyright>Winter Notes</copyright><docs>http://www.rssboard.org/rss-specification</docs><generator>python-feedgen</generator><image><url>https://avatars.githubusercontent.com/u/92662575?v=4</url><title>avatar</title><link>https://winterggg.github.io/blog</link></image><lastBuildDate>Sat, 20 Apr 2024 15:39:38 +0000</lastBuildDate><managingEditor>Winter Notes</managingEditor><ttl>60</ttl><webMaster>Winter Notes</webMaster><item><title>Think twice, code once!</title><link>https://winterggg.github.io/blog/post/Think%20twice%2C%20code%20once%21.html</link><description># Think twice, code once!&#13;
 &#13;
 &gt; 本文取材自：https://brunokiafuka.substack.com/p/think-twice-code-once&#13;
 &#13;
@@ -26,7 +26,7 @@
 1. 推迟编码：延迟编写代码直至充分理解问题和上下文，有助于减少在开发过程中可能出现的错误和误解；&#13;
 2. 广度优先策略：在深入一个解决方案之前先广泛考虑多个可能的解决方案. 这种策略可以避免在错误的方向上投入太多资源，可以有效的减少返工和提高代码质量.&#13;
 &#13;
-感觉这个其实是一种风险管理策略在软件开发中的应用，之前刷油管有个博主说非商科专业出身的人往往缺乏风险管理的意识，之后有空了可以多看看这方面的案例分析.&#13;
+感觉这个其实是一种风险管理策略在软件开发中的应用，记得之前刷油管有个博主说非商科专业出身的人往往缺乏风险管理的意识，之后有空了可以多看看这方面的案例分析.&#13;
 &#13;
 &#13;
 &#13;
