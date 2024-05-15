@@ -9,7 +9,74 @@
         let theme = localStorage.getItem("meek_theme") || "light";
         document.documentElement.setAttribute("data-color-mode", theme);
     </script>
-<meta name="description" content="Think twice, code once!">
+<meta name="description" content="# Think twice, code once!
+
+> 本文取材自：https://brunokiafuka.substack.com/p/think-twice-code-once
+
+作者在做 code review 时发现一些新手程序员往往提交一些「拧巴」 的代码 -- 要么过度工程化，要么过度复杂. 作者通过询问，发现问题的关键似乎在于这些实现只是他们的第一个想法，他们并没有去认真分析这个实现是否恰当. 
+
+针对这个问题，作者提供了一个软件开发工程的思考过程：
+
+1. **获取上下文**. 收集信息和需求，通过 5why 分析法充分理解上下文，理解代码变更的原因和影响；
+
+2. **写下假设**. 基于上一步对上下文的理解，提出假设（assumption）-- 即要做什么以及如何做，给出不同实现路径的优缺点并进行排序.  重复多次进行该步骤，但为了避免分心或失去焦点，需要限制假设的数量;
+
+3. **实现**. 从上一步的实现路径中选择一个去最终实现.
+
+   
+
+最后作者推荐了 Leslie Lamport 大佬的一个 talk，mark 了有空看看：https://www.youtube.com/watch?v=-4Yp3j_jk8Q&ab_channel=MicrosoftResearch
+
+
+
+想法：
+
+我认为可以参考的地方有两个：
+
+1. 推迟编码：延迟编写代码直至充分理解问题和上下文，有助于减少在开发过程中可能出现的错误和误解；
+2. 广度优先策略：在深入一个解决方案之前先广泛考虑多个可能的解决方案. 这种策略可以避免在错误的方向上投入太多资源，可以有效的减少返工和提高代码质量.
+
+感觉这个其实是一种风险管理策略在软件开发中的应用，记得之前刷油管有个博主说非商科专业出身的人往往缺乏风险管理的意识，之后有空了可以多看看这方面的案例分析.
+
+
+
+。">
+<meta property="og:title" content="Think twice, code once!">
+<meta property="og:description" content="# Think twice, code once!
+
+> 本文取材自：https://brunokiafuka.substack.com/p/think-twice-code-once
+
+作者在做 code review 时发现一些新手程序员往往提交一些「拧巴」 的代码 -- 要么过度工程化，要么过度复杂. 作者通过询问，发现问题的关键似乎在于这些实现只是他们的第一个想法，他们并没有去认真分析这个实现是否恰当. 
+
+针对这个问题，作者提供了一个软件开发工程的思考过程：
+
+1. **获取上下文**. 收集信息和需求，通过 5why 分析法充分理解上下文，理解代码变更的原因和影响；
+
+2. **写下假设**. 基于上一步对上下文的理解，提出假设（assumption）-- 即要做什么以及如何做，给出不同实现路径的优缺点并进行排序.  重复多次进行该步骤，但为了避免分心或失去焦点，需要限制假设的数量;
+
+3. **实现**. 从上一步的实现路径中选择一个去最终实现.
+
+   
+
+最后作者推荐了 Leslie Lamport 大佬的一个 talk，mark 了有空看看：https://www.youtube.com/watch?v=-4Yp3j_jk8Q&ab_channel=MicrosoftResearch
+
+
+
+想法：
+
+我认为可以参考的地方有两个：
+
+1. 推迟编码：延迟编写代码直至充分理解问题和上下文，有助于减少在开发过程中可能出现的错误和误解；
+2. 广度优先策略：在深入一个解决方案之前先广泛考虑多个可能的解决方案. 这种策略可以避免在错误的方向上投入太多资源，可以有效的减少返工和提高代码质量.
+
+感觉这个其实是一种风险管理策略在软件开发中的应用，记得之前刷油管有个博主说非商科专业出身的人往往缺乏风险管理的意识，之后有空了可以多看看这方面的案例分析.
+
+
+
+。">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://winterggg.github.io/blog/post/Think%20twice%2C%20code%20once%21.html">
+<meta property="og:image" content="https://avatars.githubusercontent.com/u/92662575?v=4">
 <title>Think twice, code once!</title>
 
 
