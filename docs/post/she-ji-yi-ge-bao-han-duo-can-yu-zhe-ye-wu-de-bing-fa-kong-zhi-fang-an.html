@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html data-color-mode="light" data-dark-theme="dark" data-light-theme="light" lang="zh-CN">
+<head>
+    <meta content="text/html; charset=utf-8" http-equiv="content-type" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <link href="//cdn.staticfile.net/Primer/21.0.7/primer.css" rel="stylesheet" />
+    <link rel="icon" href="https://avatars.githubusercontent.com/u/92662575?v=4"><script>
+        let theme = localStorage.getItem("meek_theme") || "light";
+        document.documentElement.setAttribute("data-color-mode", theme);
+    </script>
+<meta name="description" content="> 这是一篇公司组内分享文稿，其中的「聚合表」是指的一种支持跨表校验的实时多表物化视图功能；「聚合计算」是指的是聚合表的一种封状态；「RWLock」 是内部封装的一个基于 Redis的多粒度锁组件（X\S\IX\IS）.
+
+## TL；DR
+复杂业务的并发控制是一个多方面的问题，需要从多个角度进行综合考虑。">
+<meta property="og:title" content="设计一个包含多参与者业务的并发控制方案">
+<meta property="og:description" content="> 这是一篇公司组内分享文稿，其中的「聚合表」是指的一种支持跨表校验的实时多表物化视图功能；「聚合计算」是指的是聚合表的一种封状态；「RWLock」 是内部封装的一个基于 Redis的多粒度锁组件（X\S\IX\IS）.
+
+## TL；DR
+复杂业务的并发控制是一个多方面的问题，需要从多个角度进行综合考虑。">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://winterggg.github.io/blog/post/she-ji-yi-ge-bao-han-duo-can-yu-zhe-ye-wu-de-bing-fa-kong-zhi-fang-an.html">
+<meta property="og:image" content="https://avatars.githubusercontent.com/u/92662575?v=4">
+<title>设计一个包含多参与者业务的并发控制方案</title>
+
+
+</head>
+<style>
+body{box-sizing: border-box;min-width: 200px;max-width: 900px;margin: 20px auto;padding: 45px;font-size: 16px;font-family: sans-serif;line-height: 1.25;}
+#header{display:flex;padding-bottom:8px;border-bottom: 1px solid var(--borderColor-muted, var(--color-border-muted));margin-bottom: 16px;}
+#footer {margin-top:64px; text-align: center;font-size: small;}
+
+</style>
+
+<style>
+.postTitle{margin: auto 0;font-size:40px;font-weight:bold;}
+.title-right{display:flex;margin:auto 0 0 auto;}
+.title-right .circle{padding: 14px 16px;margin-right:8px;}
+#postBody{border-bottom: 1px solid var(--color-border-default);padding-bottom:36px;}
+#postBody hr{height:2px;}
+#cmButton{height:48px;margin-top:48px;}
+#comments{margin-top:64px;}
+.g-emoji{font-size:24px;}
+@media (max-width: 600px) {
+    body {padding: 8px;}
+    .postTitle{font-size:24px;}
+}
+</style>
+
+
+
+
+<body>
+    <div id="header">
+<h1 class="postTitle">设计一个包含多参与者业务的并发控制方案</h1>
+<div class="title-right">
+    <a href="https://winterggg.github.io/blog" id="buttonHome" class="btn btn-invisible circle" title="首页">
+        <svg class="octicon" width="16" height="16">
+            <path id="pathHome" fill-rule="evenodd"></path>
+        </svg>
+    </a>
+    
+    <a href="https://github.com/winterggg/blog/issues/12" target="_blank" class="btn btn-invisible circle" title="Issue">
+        <svg class="octicon" width="16" height="16">
+            <path id="pathIssue" fill-rule="evenodd"></path>
+        </svg>
+    </a>
+    
+
+    <a class="btn btn-invisible circle" onclick="modeSwitch();" title="切换主题">
+        <svg class="octicon" width="16" height="16" >
+            <path id="themeSwitch" fill-rule="evenodd"></path>
+        </svg>
+    </a>
+
+</div>
+</div>
+    <div id="content">
+<div class="markdown-body" id="postBody"><blockquote>
+<p>这是一篇公司组内分享文稿，其中的「聚合表」是指的一种支持跨表校验的实时多表物化视图功能；「聚合计算」是指的是聚合表的一种封状态；「RWLock」 是内部封装的一个基于 Redis的多粒度锁组件（X\S\IX\IS）.</p>
+</blockquote>
+<h2>TL；DR</h2>
+<p>复杂业务的并发控制是一个多方面的问题，需要从多个角度进行综合考虑。通过合理设计并发控制机制，可以确保系统在高并发情况下的数据一致性和操作正确性，提高系统的可靠性和稳定性。</p>
+<h2>1. 明确并发参与者</h2>
+<p>首先，必须明确可能会互相影响的事务性操作，即并发参与者。一个常见的陷阱是没有划分到合适的粒度。以聚合计算为例，聚合计算配置内嵌在表单元数据里，表单配置保存可能触发聚合计算配置的修改。表单保存对于表单设计业务自己来说是一个操作，但对于聚合计算业务领域来说，需要细分为：</p>
+<ul>
+<li>保存-编辑/新增聚合计算 → 类比于新增编辑聚合表配置</li>
+<li>保存-删除所有聚合计算 → 类比于删除一张聚合表<br>
+这两个参与者的加锁类型是不同的，需要分别处理。</li>
+</ul>
+<h2>2. 明确需要的资源及行为</h2>
+<p>需要标明所有资源，并区分其读/写行为，如果资源太多、依赖关系太复杂，大脑无法整个加载，可以用 OmniGraffle、ProcessOn 之类的工具绘制一个资源拓扑图帮助自己理解。</p>
+<p>加锁的目的是控制共享资源的读写一致性，保证在锁定资源后，读写操作之间不会发生一致性问题，常见的一致性问题有 （Copy From DDIA）：</p>
+<ul>
+<li>脏读（Dirty Read）：一个事务在读数据时，另一个事务正在修改该数据，导致读到的数据是未提交的临时数据 → 解决方案：在读取数据前对数据加读锁，确保读取过程中数据不会被其他事务修改。</li>
+<li>不可重复读（Non-Repeatable Read）：一个事务在读取同一数据两次时，两次读取的数据不同，因为在两次读取之间另一个事务修改并提交了该数据。 →  解决方案：在读取数据前对数据加读锁，直到当前事务完成，防止其他事务修改数据。</li>
+<li>幻读（Phantom Read）：一个事务在读取某范围的数据时，另一个事务在该范围内插入了新数据，导致第一次读取后再读取时，结果集不同。→ 解决方案：对读取的数据范围加锁，确保在事务执行期间，数据范围内不会有新的数据插入或删除。</li>
+<li>写偏差（Write Skew）：两个事务在读取相同的数据集并基于这些数据进行写操作，导致数据不一致。→ 解决方案：在读取和写入操作期间加写锁，确保其他事务不能同时进行相同的数据操作</li>
+<li>丢失更新（Lost Update）:两个事务同时读取相同的数据并进行修改，后提交的事务覆盖了先提交的事务的修改，导致先前的修改丢失。 → 解决方案：读取和修改数据期间加写锁，确保在当前事务提交前，其他事务不能修改相同的数据。</li>
+<li>死锁（Deadlock）:两个或多个事务在等待彼此持有的锁，导致无法继续执行。目前比较容易出现的死锁可能是“自死锁”：自己加了个 S 锁，后面又对同一个 key 加了 X 锁，或者 X 锁重入。→ 解决方案：通过设计锁的获取顺序和避免锁的嵌套，尽量减少死锁的发生。此外，可以使用死锁检测和恢复机制，检测到死锁后主动回滚其中一个事务。<br>
+绘制拓扑图有助于降低大脑功耗，理清资源读写动作的依赖关系，便于确定加锁的时机和方式。</li>
+</ul>
+<h2>3. 设计锁的种类和粒度</h2>
+<p>设计锁的种类和粒度是并发控制的关键。</p>
+<p>首先，如果两个操作强互斥（例如单张表的聚合计算配置保存和全量操作；或者同一张表的多个全量操作之间），可以考虑在一开始加一个表锁，这样可以避免后续复杂的资源操作互斥关系处理。</p>
+<p>然后，锁的粒度可以有很多种划分，比如：字段级别、行级别、页级别、表级别等。根据并发度决定合适的划分：</p>
+<ul>
+<li>高并发读写操作：使用行级锁或字段级锁，最大限度提高并发度。不那么敏感的业务，一般优先用乐观锁。</li>
+<li>低并发批量操作：使用表级锁，简化管理，提高效率。<br>
+一般中小并发度下，用行级别和表级别两个划分就够了。</li>
+</ul>
+<h2>4. 明确领域</h2>
+<p>在设计增量和全量操作时，需要明确领域。例如聚合计算增量操作除了加配置相关的锁，还要加数据锁。数据锁相对独立，与全量和配置保存关系不大，可以分开思考。</p>
+<h2>5. 考虑操作频率</h2>
+<p>考虑参与者发生的频率和成本。在聚合计算中，增量操作频率远高于全量操作和配置保存。因此，在加锁时，低频操作可以加更多的锁，而高频操作加更少的锁，减少系统整体的均摊成本。</p>
+<p>例如一种比较好的设计是，增量操作只需加当前表单的聚合计算配置锁，而全量操作和删除聚合计算需要加所有涉及表单的聚合计算配置锁。</p>
+<h2>6. 枚举中断点和确保有恢复机制</h2>
+<p>需要考虑中断点（如宕机/锁丢失）及其可恢复性。由于 MongoDB 不支持数据库事务，可以假设流程中每个地方都可能发生宕机，并考虑是否会影响一致性及恢复方案。对于聚合计算/聚合表，宕机导致的一致性错误通常可以通过发起一次全量操作解决。</p>
+<h2>7. 防御性检查</h2>
+<p>防御性检查是必要的，以避免其他代码的不严谨对业务一致性造成影响。例如，（1）当前数据锁和表锁加锁不规范、（2）老聚合表可能出现入库成功后获取锁失败的 bug（这个时候聚合计算需要继续执行增量，不让 bug 蔓延），（3）关联关系配置可能不一致、（4）表单配置保存可能存在脏读问题等。需要分别考虑并设计防御措施。</p>
+<h2>8. 熟悉你所用的轮子</h2>
+<p>这里主要是考虑所依赖的锁工具是否支持锁重入、锁续期等。目前，系统的RWLock不支持锁重入和锁续期，因此需要特殊逻辑记录并排除已加过的锁，并根据业务预估耗时调整锁的超时时间。</p>
+<h2>9. 真正的TL;DR：并发度考虑（逃</h2>
+<p>考虑当前系统的QPS情况。例如简道云 QPS 正常场景下没有那么高，也许设计上可以允许不那么完美的方案。</p>
+<p>绝对完美的方案一般会有性能损耗，需要在一致性和性能之间找到平衡。</p></div>
+<div style="font-size:small;margin-top:8px;float:right;"></div>
+<button class="btn btn-block" type="button" onclick="openComments()" id="cmButton">评论</button>
+<div class="comments" id="comments"></div>
+</div>
+    <div id="footer">Copyright © <span id="year"></span><a href="https://winterggg.github.io/blog"> Winter Notes </a>
+<p>
+<span id="runday"></span>Powered by <a href="https://meekdai.com/Gmeek.html" target="_blank">Gmeek</a>
+</p>
+
+<script>
+if(""!=""){
+    var now=new Date();
+    var startSite=new Date("");
+    var diff=now.getTime()-startSite.getTime();
+    var diffDay=Math.floor(diff/(1000*60*60*24));
+    document.getElementById("year").innerHTML=now.getFullYear();
+    if(""!=""){document.getElementById("runday").innerHTML=" • "+"网站运行"+diffDay+"天"+" • ";}
+    else{document.getElementById("runday").innerHTML="网站运行"+diffDay+"天"+" • ";}
+}
+</script>
+</div>
+</body>
+<script>
+var IconList={'sun': 'M8 10.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM8 12a4 4 0 100-8 4 4 0 000 8zM8 0a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0V.75A.75.75 0 018 0zm0 13a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 018 13zM2.343 2.343a.75.75 0 011.061 0l1.06 1.061a.75.75 0 01-1.06 1.06l-1.06-1.06a.75.75 0 010-1.06zm9.193 9.193a.75.75 0 011.06 0l1.061 1.06a.75.75 0 01-1.06 1.061l-1.061-1.06a.75.75 0 010-1.061zM16 8a.75.75 0 01-.75.75h-1.5a.75.75 0 010-1.5h1.5A.75.75 0 0116 8zM3 8a.75.75 0 01-.75.75H.75a.75.75 0 010-1.5h1.5A.75.75 0 013 8zm10.657-5.657a.75.75 0 010 1.061l-1.061 1.06a.75.75 0 11-1.06-1.06l1.06-1.06a.75.75 0 011.06 0zm-9.193 9.193a.75.75 0 010 1.06l-1.06 1.061a.75.75 0 11-1.061-1.06l1.06-1.061a.75.75 0 011.061 0z', 'moon': 'M9.598 1.591a.75.75 0 01.785-.175 7 7 0 11-8.967 8.967.75.75 0 01.961-.96 5.5 5.5 0 007.046-7.046.75.75 0 01.175-.786zm1.616 1.945a7 7 0 01-7.678 7.678 5.5 5.5 0 107.678-7.678z', 'sync': 'M1.705 8.005a.75.75 0 0 1 .834.656 5.5 5.5 0 0 0 9.592 2.97l-1.204-1.204a.25.25 0 0 1 .177-.427h3.646a.25.25 0 0 1 .25.25v3.646a.25.25 0 0 1-.427.177l-1.38-1.38A7.002 7.002 0 0 1 1.05 8.84a.75.75 0 0 1 .656-.834ZM8 2.5a5.487 5.487 0 0 0-4.131 1.869l1.204 1.204A.25.25 0 0 1 4.896 6H1.25A.25.25 0 0 1 1 5.75V2.104a.25.25 0 0 1 .427-.177l1.38 1.38A7.002 7.002 0 0 1 14.95 7.16a.75.75 0 0 1-1.49.178A5.5 5.5 0 0 0 8 2.5Z', 'home': 'M6.906.664a1.749 1.749 0 0 1 2.187 0l5.25 4.2c.415.332.657.835.657 1.367v7.019A1.75 1.75 0 0 1 13.25 15h-3.5a.75.75 0 0 1-.75-.75V9H7v5.25a.75.75 0 0 1-.75.75h-3.5A1.75 1.75 0 0 1 1 13.25V6.23c0-.531.242-1.034.657-1.366l5.25-4.2Zm1.25 1.171a.25.25 0 0 0-.312 0l-5.25 4.2a.25.25 0 0 0-.094.196v7.019c0 .138.112.25.25.25H5.5V8.25a.75.75 0 0 1 .75-.75h3.5a.75.75 0 0 1 .75.75v5.25h2.75a.25.25 0 0 0 .25-.25V6.23a.25.25 0 0 0-.094-.195Z', 'github': 'M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z'};
+var utterancesLoad=0;
+
+let themeSettings={
+    "dark": ["dark","moon","#00f0ff","dark-blue"],
+    "light": ["light","sun","#ff5000","github-light"],
+    "auto": ["auto","sync","","preferred-color-scheme"]
+};
+function changeTheme(mode, icon, color, utheme){
+    document.documentElement.setAttribute("data-color-mode",mode);
+    document.getElementById("themeSwitch").setAttribute("d",value=IconList[icon]);
+    document.getElementById("themeSwitch").parentNode.style.color=color;
+    if(utterancesLoad==1){utterancesTheme(utheme);}
+}
+function modeSwitch(){
+    let currentMode=document.documentElement.getAttribute('data-color-mode');
+    let newMode = currentMode === "light" ? "dark" : currentMode === "dark" ? "auto" : "light";
+    localStorage.setItem("meek_theme", newMode);
+    if(themeSettings[newMode]){
+        changeTheme(...themeSettings[newMode]);
+    }
+}
+function utterancesTheme(theme){
+    const message={type:'set-theme',theme: theme};
+    const iframe=document.getElementsByClassName('utterances-frame')[0];
+    iframe.contentWindow.postMessage(message,'https://utteranc.es');
+}
+if(themeSettings[theme]){changeTheme(...themeSettings[theme]);}
+console.log("\n %c Gmeek last https://github.com/Meekdai/Gmeek \n\n","padding:5px 0;background:#02d81d;color:#fff");
+</script>
+
+<script>
+document.getElementById("pathHome").setAttribute("d",IconList["home"]);
+document.getElementById("pathIssue").setAttribute("d",IconList["github"]);
+
+function openComments(){
+    cm=document.getElementById("comments");
+    cmButton=document.getElementById("cmButton");
+    cmButton.innerHTML="loading";
+    span=document.createElement("span");
+    span.setAttribute("class","AnimatedEllipsis");
+    cmButton.appendChild(span);
+
+    script=document.createElement("script");
+    script.setAttribute("src","https://utteranc.es/client.js");
+    script.setAttribute("repo","winterggg/blog");
+    script.setAttribute("issue-term","title");
+    
+    if(localStorage.getItem("meek_theme")=="dark"){script.setAttribute("theme","dark-blue");}
+    else if(localStorage.getItem("meek_theme")=="light") {script.setAttribute("theme","github-light");}
+    else{script.setAttribute("theme","preferred-color-scheme");}
+    
+    script.setAttribute("crossorigin","anonymous");
+    script.setAttribute("async","");
+    cm.appendChild(script);
+
+    int=self.setInterval("iFrameLoading()",200);
+}
+
+function iFrameLoading(){
+    var utterances=document.getElementsByClassName('utterances');
+    if(utterances.length==1){
+        if(utterances[0].style.height!=""){
+            utterancesLoad=1;
+            int=window.clearInterval(int);
+            document.getElementById("cmButton").style.display="none";
+            console.log("utterances Load OK");
+        }
+    }
+}
+</script>
+
+
+</html>
